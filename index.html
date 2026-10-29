@@ -1,0 +1,1073 @@
+<title>폭발 작화 시뮬레이터</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+KR:wght@400;500;600&display=swap">
+<style>
+/* Layout: a compositing desk. Stage + timesheet on the left, parameter rack on the right; stacks on phones. */
+:root{
+  --bg:#eceef3; --panel:#fbfbfd; --fg:#1b1d24; --muted:#5b6070; --line:#d3d7e0; --well:#e2e5ec;
+  --accent:#d9690a; --accent-ink:#ffffff;
+  --sans:"IBM Plex Sans KR",system-ui,-apple-system,"Apple SD Gothic Neo","Malgun Gothic","Hiragino Sans","Yu Gothic UI","Meiryo","PingFang SC","Microsoft YaHei","PingFang TC","Microsoft JhengHei","Noto Sans CJK JP",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#111217; --panel:#191b22; --fg:#e8e9ef; --muted:#9298a8; --line:#2b2e39; --well:#22252e;
+  --accent:#f08a2a; --accent-ink:#1a1206; color-scheme:dark }}
+:root[data-theme="dark"]{
+  --bg:#111217; --panel:#191b22; --fg:#e8e9ef; --muted:#9298a8; --line:#2b2e39; --well:#22252e;
+  --accent:#f08a2a; --accent-ink:#1a1206; color-scheme:dark }
+html,body{background:var(--bg);color:var(--fg)}
+body{font-family:var(--sans);font-size:14px;line-height:1.5;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:20px 32px}
+.wrap{max-width:1320px;margin:0 auto;display:grid;gap:16px}
+header{display:flex;flex-wrap:wrap;align-items:center;gap:6px 16px}
+h1{font-size:20px;font-weight:600;margin:0;letter-spacing:-.01em;text-wrap:balance}
+.tag{font-family:var(--mono);font-size:12px;color:var(--muted)}
+.swatches{display:flex;gap:4px;align-items:center;margin-left:auto}
+.swatches i{width:14px;height:14px;border-radius:3px;display:block;border:1px solid rgba(0,0,0,.15)}
+.main{display:grid;grid-template-columns:minmax(0,1fr) 316px;gap:16px;align-items:start}
+@media (max-width:980px){.main{grid-template-columns:minmax(0,1fr)}}
+.stage{display:grid;gap:10px;min-width:0}
+.screen{position:relative;width:100%;max-width:100%;aspect-ratio:16/9;border-radius:6px;overflow:hidden;background:#000}
+.screen canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+#gl{cursor:crosshair;touch-action:none}
+.fail{position:absolute;inset:0;display:grid;place-items:center;padding:24px;text-align:center;color:#1b1d24;background:#cfd8f5}
+.transport{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+button,select{font:inherit;color:var(--fg);background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:6px 10px;cursor:pointer}
+button:hover,select:hover{border-color:var(--muted)}
+button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+button.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:600;min-width:84px}
+.readout{display:flex;flex-wrap:wrap;gap:4px 16px;font-family:var(--mono);font-size:12.5px;color:var(--muted);margin-left:auto;font-variant-numeric:tabular-nums}
+.readout b{color:var(--fg);font-weight:500}
+.readout .koma b{color:var(--accent)}
+.sheet{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:10px 12px;display:grid;gap:6px}
+.sheet-head{display:flex;flex-wrap:wrap;justify-content:space-between;gap:4px 12px;font-size:12px;color:var(--muted)}
+.sheet-head strong{color:var(--fg);font-weight:600;font-size:13px}
+#xsheet{width:100%;height:74px;display:block;cursor:pointer;touch-action:none}
+.legend{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:12px;color:var(--muted)}
+.legend span{display:inline-flex;align-items:center;gap:5px}
+.legend i{width:10px;height:10px;border-radius:2px;display:inline-block}
+.rack{background:var(--panel);border:1px solid var(--line);border-radius:6px;display:grid}
+.rack section{padding:12px 14px;display:grid;gap:10px;border-top:1px solid var(--line)}
+.rack section:first-child{border-top:0}
+.rack h2{margin:0;font-size:11.5px;font-weight:600;letter-spacing:.08em;color:var(--muted)}
+#detailTitle{font-size:28.75px;line-height:1.2;letter-spacing:-.01em;color:var(--fg)}
+.row{display:grid;grid-template-columns:112px minmax(0,1fr) 40px;gap:8px;align-items:center}
+.row label{font-size:13px}
+.row output{font-family:var(--mono);font-size:12px;text-align:right;color:var(--muted);font-variant-numeric:tabular-nums}
+input[type=range]{width:100%;accent-color:var(--accent)}
+.seg{display:grid;grid-template-columns:repeat(4,1fr);border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.seg.two{grid-template-columns:1fr 1fr}
+.seg button{border:0;border-radius:0;border-left:1px solid var(--line);padding:6px 4px;font-size:12.5px;background:var(--panel)}
+.seg button:first-child{border-left:0}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink);font-weight:600}
+.checks{display:grid;grid-template-columns:1fr 1fr;gap:6px 10px}
+.checks label{display:flex;gap:7px;align-items:center;font-size:13px;cursor:pointer}
+input[type=checkbox]{accent-color:var(--accent);width:15px;height:15px;margin:0}
+.note{font-size:12px;color:var(--muted);margin:0;line-height:1.55}
+#hint[hidden]{display:none!important}
+.exlist{list-style:none;margin:0;padding:0;display:grid;gap:4px;max-height:320px;overflow-y:auto}
+.exlist li{display:grid;grid-template-columns:44px minmax(0,1fr);gap:4px 10px;align-items:center;padding:6px 8px 6px 10px;border:1px solid var(--line);border-radius:6px;background:var(--well);font-size:13px}
+.exlist .no{font-family:var(--mono);font-weight:600;color:var(--accent);font-size:13px}
+.exlist .meta{font-family:var(--mono);font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.exlist .meta b{color:var(--fg);font-weight:500}
+.exlist .dir{display:inline-block;width:1em;text-align:center}
+.exlist button{padding:3px 10px;font-size:12.5px}
+.exlist .ctl{grid-column:2;display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center}
+.exlist .ctl label{display:flex;gap:6px;align-items:center;font-size:12.5px;cursor:pointer}
+.exlist .ctl input[type=range]{width:110px;flex:1 1 90px;min-width:70px}
+.exlist .ctl output{font-family:var(--mono);font-size:12px;color:var(--muted);min-width:34px;font-variant-numeric:tabular-nums}
+.exlist .ctl .btns{display:flex;gap:6px;margin-left:auto}
+.exlist .vis{display:inline-flex;align-items:center;gap:5px;min-width:72px;padding:3px 9px;font-size:12px;font-weight:600}
+.exlist .vis[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.exlist li.off .no,.exlist li.off .meta{opacity:.45}
+.rack h3.sub{margin:4px 0 0;font-size:12px;font-weight:600;color:var(--fg)}
+.exlist li{cursor:pointer}
+.exlist li.sel{border-color:var(--accent);box-shadow:inset 3px 0 0 var(--accent)}
+.layernote{margin:0;font-size:12px;line-height:1.55;color:var(--muted)}
+.marks{position:relative;height:0;margin-top:-4px;touch-action:none}
+.mark{position:absolute;transform:translateX(-50%);min-width:22px;height:18px;padding:0 5px;border-radius:0 0 5px 5px;border:1px solid var(--line);border-top:0;background:var(--panel);color:var(--fg);font:600 11px/17px var(--mono);cursor:grab;touch-action:none;user-select:none}
+.mark::before{content:"";position:absolute;left:50%;top:-5px;width:2px;height:5px;margin-left:-1px;background:var(--muted)}
+.mark.sel{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.mark.sel::before{background:var(--accent)}
+.mark.off{opacity:.45}
+.mark.dragging{cursor:grabbing;z-index:2}
+.camtrack{display:grid;gap:4px;margin-top:2px}
+.camctl{display:grid;grid-template-columns:auto minmax(80px,1fr) 44px auto auto auto auto;gap:8px;align-items:center;font-size:13px}
+.camctl output{font-family:var(--mono);font-size:12px;color:var(--muted);text-align:right;font-variant-numeric:tabular-nums}
+.camctl button,.camctl select{padding:4px 9px;font-size:12.5px}
+.cammarks{margin-top:0}
+.cmenu{position:fixed;z-index:50;min-width:200px;padding:4px;border:1px solid var(--line);border-radius:8px;background:var(--panel);color:var(--fg);box-shadow:0 8px 24px rgba(0,0,0,.25);font-size:13px}
+.cmenu button{display:flex;width:100%;gap:8px;align-items:center;justify-content:flex-start;border:0;border-radius:5px;background:none;padding:5px 8px;font-size:13px;text-align:left}
+.cmenu button:hover,.cmenu button:focus-visible{background:var(--well)}
+.cmenu button .ck{width:14px;color:var(--accent);font-weight:700}
+.cmenu hr{border:0;border-top:1px solid var(--line);margin:4px 2px}
+.cmenu .hd{padding:4px 8px 2px;color:var(--muted);font-size:11.5px}
+.cmenu .rowb{display:grid;grid-template-columns:repeat(4,auto);gap:2px;padding:0 4px 2px}
+.cmenu .rowb button{justify-content:center;padding:4px 6px;font-size:12px}
+.cmenu .rowb button.on{background:var(--accent);color:var(--accent-ink)}
+.cammarks .mark{border-radius:5px;border-top:1px solid var(--line);min-width:44px}
+.cammarks .mark::before{display:none}
+.camgraph{display:block;width:100%;height:170px;outline:none;border:1px solid var(--line);border-radius:6px;background:var(--well);touch-action:none;cursor:crosshair}
+@media (max-width:560px){.camctl{grid-template-columns:auto minmax(60px,1fr) 40px;}}
+#detail .vis{display:inline-flex;align-items:center;gap:5px;justify-self:start;min-width:72px;padding:3px 9px;font-size:12px;font-weight:600}
+#detail .vis[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.exlist .empty{grid-template-columns:1fr;color:var(--muted);background:none;border-style:dashed}
+.seedrow{display:flex;gap:8px;align-items:center}
+.seedrow input{width:84px;font:inherit;font-family:var(--mono);padding:5px 8px;border:1px solid var(--line);border-radius:6px;background:var(--well);color:var(--fg)}
+</style>
+
+<div class="wrap">
+  <header>
+    <h1 data-i18n="title">폭발 작화 시뮬레이터</h1>
+    <span class="credit" style="margin-left:auto;font-size:13px;color:var(--muted)"><span data-i18n="madeBy">만든이</span> : KYE , Claude</span>
+    <label class="langpick" style="display:inline-flex;align-items:center;gap:8px;color:var(--muted)">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9.2"/><path d="M2.8 12h18.4"/><path d="M12 2.8c2.6 2.6 3.9 5.7 3.9 9.2s-1.3 6.6-3.9 9.2c-2.6-2.6-3.9-5.7-3.9-9.2s1.3-6.6 3.9-9.2z"/></svg>
+    <select id="lang" aria-label="Language">
+      <option value="ko">한국어</option>
+      <option value="en">English</option>
+      <option value="ja">日本語</option>
+      <option value="zh-CN">简体中文</option>
+      <option value="zh-TW">繁體中文</option>
+    </select>
+    </label>
+  </header>
+
+  <div class="main">
+    <div class="stage">
+      <div class="screen" id="screen">
+        <canvas id="bgc" aria-hidden="true" style="pointer-events:none"></canvas>
+        <canvas id="gl" width="960" height="540" data-i18n-aria="canvas" aria-label="폭발 애니메이션 미리보기"></canvas>
+        <canvas id="fgc" aria-hidden="true" style="pointer-events:none"></canvas>
+        <canvas id="ov" aria-hidden="true" style="pointer-events:none"></canvas>
+      </div>
+      <input type="range" id="scrub" min="0" max="143" step="1" value="0" data-i18n-aria="scrub" aria-label="재생 위치" style="width:100%;margin:0">
+      <div id="marks" class="marks" role="group" data-i18n-aria="marksAria" aria-label="폭발 시작 책갈피"></div>
+      <div class="camtrack">
+        <div class="camctl">
+          <label for="camYaw" data-i18n="camYaw">카메라 좌우</label>
+          <input type="range" id="camYaw" min="-180" max="180" step="1" value="0"><output id="camYawO">0°</output>
+          <button type="button" id="camAdd" data-i18n="camAdd">키 추가</button>
+          <button type="button" id="camDel" data-i18n="camDel">키 삭제</button>
+          <button type="button" id="camClear" data-i18n="clearAll">모두 지우기</button>
+          <select id="camMode" data-i18n-aria="tMode" aria-label="탄젠트">
+            <option value="clamped" data-i18n="tClamped">클램프 자동</option>
+            <option value="auto" data-i18n="tAuto">자동</option>
+            <option value="free" data-i18n="tFree">자유 스무스</option>
+            <option value="flat" data-i18n="tFlat">평탄</option>
+            <option value="broken" data-i18n="tBroken">분리</option>
+          </select>
+        </div>
+        <div id="camMarks" class="marks cammarks" role="group" data-i18n-aria="camMarksAria" aria-label="카메라 키"></div>
+        <canvas id="camGraph" class="camgraph" tabindex="0" data-i18n-aria="camGraphAria" aria-label="카메라 좌우 그래프"></canvas>
+      </div>
+      <div class="transport">
+        <button id="play" class="primary">일시정지</button>
+        <button id="restart" data-i18n="restart">처음부터</button>
+        <button id="prev" data-i18n-title="prev" title="한 프레임 뒤로 (←)">◀ 1f</button>
+        <button id="next" data-i18n-title="next" title="한 프레임 앞으로 (→)">1f ▶</button>
+        <select id="speed" data-i18n-aria="speed" aria-label="재생 속도">
+          <option value="1" data-i18n="sp1">1× 속도</option>
+          <option value="0.5" data-i18n="sp05">½× 속도</option>
+          <option value="0.25" data-i18n="sp025">¼× 속도</option>
+        </select>
+        <div class="readout">
+          <span>F <b id="rFrame">000</b>/<span id="rTotal">0</span></span>
+          <span><b id="rSec">0.00</b>s</span>
+          <span><span data-i18n="cntPre">폭발</span> <b id="rCount">1</b><span data-i18n="cntPost">개</span></span>
+        </div>
+      </div>
+      <div class="sheet">
+        <div class="sheet-head"><strong data-i18n="placed">폭발 레이어</strong><span data-i18n="keys">Space 재생 · ←/→ 1프레임</span></div>
+        <p class="layernote" data-i18n="layerNote"></p>
+        <div class="transport">
+          <button id="clearAll" data-i18n="clearAll">모두 지우기</button>
+        </div>
+        <ol class="exlist" id="exList" data-i18n-aria="list" aria-label="추가한 폭발 목록"></ol>
+      </div>
+    </div>
+
+    <div class="rack">
+      <section>
+        <h2 data-i18n="secView">보기</h2>
+        <div class="row"><label for="bgCol" data-i18n="bgCol">배경색</label><input type="color" id="bgCol" value="#000000" data-i18n-aria="bgCol" aria-label="배경색" style="width:100%;height:28px;padding:0;border:1px solid var(--line);border-radius:6px;background:none;cursor:pointer"><output id="bgColO">#000</output></div>
+        <div class="seg two" role="group" data-i18n-aria="viewMode" aria-label="보기 방식">
+          <button data-view="cel" aria-pressed="true" data-i18n="cel">셀 필터</button>
+          <button data-view="raw" aria-pressed="false" data-i18n="raw">3D 원본</button>
+        </div>
+      </section>
+      <section>
+        <h2 data-i18n="secVideo">영상</h2>
+        <div class="row"><label for="videoSec" data-i18n="videoSec">영상 길이</label><input type="range" id="videoSec" min="3" max="10" step="0.5" value="6"><output id="videoSecO">6.0</output></div>
+      </section>
+      <section id="detail" hidden>
+        <h2 id="detailTitle"></h2>
+        <h3 class="sub" data-i18n="secHeat">열</h3>
+        <div class="row"><label for="heatLife" data-i18n="heatLife">열이 식는 속도</label><input type="range" id="heatLife" min="0.3" max="2.5" step="0.05" value="1.5"><output id="heatLifeO">1.50</output></div>
+        <div class="row"><label for="heatDelay" data-i18n="heatDelay">식기 시작</label><input type="range" id="heatDelay" min="0" max="1.5" step="0.05" value="0.25"><output id="heatDelayO">0.25</output></div>
+        <h3 class="sub" data-i18n="secShape">형태</h3>
+        <div class="row"><label for="settle" data-i18n="settle">감속</label><input type="range" id="settle" min="0.8" max="5" step="0.1" value="2.2"><output id="settleO">2.2</output></div>
+        <div class="row"><label for="size" data-i18n="size">크기</label><input type="range" id="size" min="0.4" max="1.4" step="0.05" value="0.75"><output id="sizeO">0.75</output></div>
+        <div class="row"><label for="lobes" data-i18n="lobes">큰 덩어리</label><input type="range" id="lobes" min="4" max="7" step="1" value="7"><output id="lobesO">7</output></div>
+        <div class="row"><label for="jet" data-i18n="jet">돌출</label><input type="range" id="jet" min="0" max="1" step="0.05" value="0.55"><output id="jetO">0.55</output></div>
+        <div class="row"><label for="spread" data-i18n="spread">가로 퍼짐</label><input type="range" id="spread" min="0.8" max="1.6" step="0.05" value="1.2"><output id="spreadO">1.20</output></div>
+        <div class="row"><label for="rise" data-i18n="rise">상승·말림</label><input type="range" id="rise" min="0" max="1" step="0.05" value="0.5"><output id="riseO">0.50</output></div>
+        <div class="row"><label for="blend" data-i18n="blend">합침 정도</label><input type="range" id="blend" min="0" max="1" step="0.05" value="0.45"><output id="blendO">0.45</output></div>
+        <div class="row"><label for="bump" data-i18n="bump">뭉게 크기</label><input type="range" id="bump" min="0" max="1" step="0.05" value="0.6"><output id="bumpO">0.60</output></div>
+        <div class="row"><label for="turb" data-i18n="turb">난류</label><input type="range" id="turb" min="0" max="1" step="0.05" value="0.45"><output id="turbO">0.45</output></div>
+        <div class="row"><label for="tone" data-i18n="tone">명암 흔들림</label><input type="range" id="tone" min="0" max="1" step="0.05" value="0.3"><output id="toneO">0.30</output></div>
+        <h3 class="sub" data-i18n="secDebris">파편</h3>
+        <div class="row"><span data-i18n="dbOnLbl">파편</span><button type="button" id="dbOn" class="vis" aria-pressed="false"></button><span></span></div>
+        <div class="row"><label for="dbCol" data-i18n="dbCol">색</label><input type="color" id="dbCol" value="#6e6259" style="width:100%;height:26px;padding:0;border:1px solid var(--line);border-radius:6px;background:none;cursor:pointer"><output id="dbColO">#6e6259</output></div>
+        <div class="row"><label for="dbCount" data-i18n="dbCount">개수</label><input type="range" id="dbCount" min="1" max="40" step="1" value="25"><output id="dbCountO">25</output></div>
+        <div class="row"><label for="dbSpeed" data-i18n="dbSpeed">속도</label><input type="range" id="dbSpeed" min="0.2" max="2" step="0.05" value="0.5"><output id="dbSpeedO">0.50</output></div>
+        <div class="row"><label for="dbGrav" data-i18n="dbGrav">중력 영향</label><input type="range" id="dbGrav" min="0" max="2" step="0.05" value="1"><output id="dbGravO">1.00</output></div>
+        <div class="row"><label for="dbBounce" data-i18n="dbBounce">바운스</label><input type="range" id="dbBounce" min="0" max="0.9" step="0.05" value="0.2"><output id="dbBounceO">0.20</output></div>
+        <h3 class="sub" data-i18n="secSeed">시드</h3>
+        <div class="seedrow">
+          <input id="seed" type="number" value="7" min="1" max="99999" data-i18n-aria="seedVal" aria-label="시드 값">
+          <button id="reseed" data-i18n="reseed">새 시드</button>
+        </div>
+      </section>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+const MAXT=576,MAXE=12,LIMAX=160;
+const S={camYaw:0,camPitch:0,view:'cel',mode:'ground',videoSec:6,punch:1,settle:2.2,shake:true,
+  white:false,whiteCol:'#fffdf0',whiteStart:0,whiteHold:2,whiteFade:2,
+  heatLife:1.3,heatDelay:0.25,edgeCool:0.6,
+  size:0.75,lobes:7,jet:0.55,blend:0.45,spread:1.2,turb:0.45,tone:0.3,rise:0.5,bump:0.6,
+  dbCount:25,dbSpeed:0.5,dbGrav:1,dbBounce:0.2,
+  second:false,dark:false,bgCol:'#000000',seed:7};
+
+const clamp=(v,a=0,b=1)=>v<a?a:v>b?b:v;
+function rng(seed){let a=seed>>>0;return function(){a=(a+0x6D2B79F5)|0;let t=Math.imul(a^(a>>>15),1|a);t=(t+Math.imul(t^(t>>>7),61|t))^t;return((t^(t>>>14))>>>0)/4294967296}}
+function hash(a,b){let x=Math.imul(a|0,0x27d4eb2d)^Math.imul((b|0)+0x165667b1,0x85ebca6b)^Math.imul(S.seed|0,0x2545f491);x^=x>>>15;x=Math.imul(x,0x2c1b3c6d);x^=x>>>12;x=Math.imul(x,0x297a2d39);x^=x>>>15;return(x>>>0)/4294967296}
+
+// ================= WebGL: density field ray-march + cel filter =================
+const glc=document.getElementById('gl');
+if(window.__EXPLOSION_RES){glc.width=window.__EXPLOSION_RES;glc.height=Math.round(window.__EXPLOSION_RES*9/16)}
+const gl=glc.getContext('webgl2',{antialias:false,preserveDrawingBuffer:true,alpha:true,premultipliedAlpha:false});
+if(!gl){const d=document.createElement('div');d.className='fail';d.textContent='이 브라우저에서 WebGL2를 쓸 수 없어서 시뮬레이터를 그릴 수 없습니다. 최신 Chrome, Edge, Safari, Firefox에서 열어 주세요.';document.getElementById('screen').appendChild(d);return}
+const VS=`#version 300 es
+in vec2 a;void main(){gl_Position=vec4(a,0.,1.);}`;
+const FS=`#version 300 es
+precision highp float;
+uniform vec2 uRes;uniform highp sampler2D uPT;uniform highp sampler2D uET;uniform int uN,uNE;
+uniform float uSeed,uScale,uTau,uTurb,uTone,uDark,uRaw,uGround,uGroundOn,uBump;
+uniform mat3 uCamI;uniform vec3 uPiv;uniform vec2 uShake,uZ;uniform vec4 uWhite;uniform float uAlpha;uniform vec3 uBgCol;uniform int uHi;uniform float uHiOn;
+out vec4 o;
+const vec3 SKY=vec3(.557,.682,.992),CL1=vec3(.706,.780,.984),CL2=vec3(.812,.859,.988),GND=vec3(.435,.522,.784),GND2=vec3(.380,.459,.706);
+const vec3 NIGHT=vec3(.102,.114,.161),NC1=vec3(.137,.157,.216),NC2=vec3(.165,.188,.259),NGND=vec3(.075,.082,.110);
+const vec3 HOT=vec3(1.,.992,.902),YEL=vec3(.961,.961,.447),ORA=vec3(.925,.486,.071),MAG=vec3(.859,.098,.380),SMK=vec3(.353,.353,.337),SMD=vec3(.263,.263,.247);
+const vec3 Ld=vec3(-.5,.62,.6);
+int LI[${LIMAX}];int LN=0;
+vec3 gC1,gD1,gC2,gD2;float gB1,gB2,gW2,gF1,gF2;float gTurb,gBump,gTone,gR;
+vec4 PA(int i){return texelFetch(uPT,ivec2(i,0),0);}
+vec4 PB(int i){return texelFetch(uPT,ivec2(i,1),0);}
+float h21(vec2 p){p=fract(p*vec2(123.34,456.21));p+=dot(p,p+45.32);return fract(p.x*p.y);}
+float vn(vec2 p){vec2 i=floor(p),f=fract(p);vec2 u=f*f*(3.-2.*f);return mix(mix(h21(i),h21(i+vec2(1,0)),u.x),mix(h21(i+vec2(0,1)),h21(i+vec2(1,1)),u.x),u.y);}
+float fbm(vec2 p){float s=0.,a=.5;mat2 r=mat2(.8,.6,-.6,.8);for(int i=0;i<4;i++){s+=a*vn(p);p=r*p*2.03+11.7;a*=.5;}return s/.9375;}
+float h31(vec3 p){p=fract(p*.3183099+vec3(.1,.2,.3));p*=17.;return fract(p.x*p.y*p.z*(p.x+p.y+p.z));}
+float vn3(vec3 x){vec3 i=floor(x),f=fract(x);f=f*f*(3.-2.*f);
+  return mix(mix(mix(h31(i),h31(i+vec3(1,0,0)),f.x),mix(h31(i+vec3(0,1,0)),h31(i+vec3(1,1,0)),f.x),f.y),
+             mix(mix(h31(i+vec3(0,0,1)),h31(i+vec3(1,0,1)),f.x),mix(h31(i+vec3(0,1,1)),h31(i+vec3(1,1,1)),f.x),f.y),f.z);}
+vec3 h33(vec3 p){p=vec3(dot(p,vec3(127.1,311.7,74.7)),dot(p,vec3(269.5,183.3,246.1)),dot(p,vec3(113.5,271.9,124.6)));return fract(sin(p)*43758.5453);}
+float worley(vec3 p){vec3 i=floor(p),f=fract(p);float md=9.;for(int z=-1;z<=1;z++)for(int y=-1;y<=1;y++)for(int x=-1;x<=1;x++){vec3 o=vec3(x,y,z);vec3 r=o+h33(i+o)*.85-f;md=min(md,dot(r,r));}return sqrt(md);}
+float fbm3(vec3 p){return .57*vn3(p)+.29*vn3(p*2.07+3.1)+.14*vn3(p*4.13+7.7);}
+float aa(float x){float w=fwidth(x);return clamp(x/max(w,1e-5)+.5,0.,1.);}
+float kern(float d2,float r){float t=1.-d2/(r*r);return t>0.?t*t*t:0.;}
+// physical density: sum of puffs, modulated by advected 3D turbulence of the explosion that owns this pixel
+// height above the ground of a camera-space point (the camera can look from any angle; the world stays upright)
+float worldY(vec3 x){return (uCamI*(x-uPiv)).y+uPiv.y;}
+float fieldRaw(vec3 x);
+// the march sees nothing under the ground (a hair below it, so the anti-aliased edge decides the exact line);
+// shading (normal, self-shadow) uses the uncut field so the cut face doesn't get a dark rim
+float field(vec3 x){if(uGroundOn>.5&&worldY(x)<uGround-2./uRes.y)return 0.;return fieldRaw(x);}
+float fieldRaw(vec3 x){
+  // densities of different explosions are not added up (that swells the overlap); they are joined with a soft maximum,
+  // so heavy overlaps fuse into one mass while each keeps its own extent
+  float se[${MAXE}];for(int e=0;e<${MAXE};e++)se[e]=0.;
+  for(int k=0;k<${LIMAX};k++){if(k>=LN)break;int i=LI[k];vec4 a=PA(i);vec4 b=PB(i);vec3 d=x-a.xyz;se[int(b.z)]+=b.x*kern(dot(d,d),a.w);}
+  float s4=0.;for(int e=0;e<${MAXE};e++){if(e>=uNE)break;float v=se[e];s4+=v*v*v*v;}
+  float s=sqrt(sqrt(s4));
+  if(s<uTau*.25)return s;
+  // each explosion keeps its own undistorted turbulence; where two overlap only the resulting values are mixed
+  vec3 q1=(uCamI*(x-gC1))/gB1*gF1;float n=fbm3(q1*1.6+gD1);float w=worley(q1*4.2+gD1*.6);
+  if(gW2>0.){vec3 q2=(uCamI*(x-gC2))/gB2*gF2;n=mix(n,fbm3(q2*1.6+gD2),gW2);w=mix(w,worley(q2*4.2+gD2*.6),gW2);}
+  s*=(1.+gTurb*(n-.5)*2.2)*(1.+gBump*(.55-w)*1.6);
+  return s;
+}
+void main(){
+  vec2 p=(gl_FragCoord.xy-.5*uRes)/uRes.y*2.-uShake;
+  vec3 col;vec3 ecol=vec3(0.);float EA=0.;
+  // flat stage colour; the ground is only a faint guide line that contrasts with it
+  col=uBgCol;
+  if(uN>0){
+    float ub=0.;float ce[${MAXE}];for(int e=0;e<${MAXE};e++)ce[e]=0.;
+    for(int i=0;i<${MAXT};i++){if(i>=uN)break;vec4 a=PA(i);vec4 b=PB(i);vec2 d=p-a.xy;float c=b.x*kern(dot(d,d),a.w);
+      if(c>0.){ub+=c;ce[int(b.z)]+=c;if(LN<${LIMAX}){LI[LN]=i;LN++;}}}
+    float px2=2./uRes.y;
+    if(uGroundOn>.5&&max(worldY(vec3(p,uZ.x)),worldY(vec3(p,uZ.y)))<uGround-px2)ub=0.;
+    if(ub*1.5>uTau*.6){
+      // each explosion's turbulence space, weighted by how much of this pixel's density it owns: no hard seam where they overlap
+      int e1=0,e2=-1;float c1=-1.,c2=0.;
+      for(int e=0;e<${MAXE};e++){if(e>=uNE)break;float c=ce[e];if(c>c1){c2=c1;e2=e1;c1=c;e1=e;}else if(c>c2){c2=c;e2=e;}}
+      vec4 A0=texelFetch(uET,ivec2(e1,0),0),A1=texelFetch(uET,ivec2(e1,1),0);gC1=A0.xyz;gB1=A0.w;gD1=A1.xyz;gF1=A1.w;
+      gW2=0.;gC2=gC1;gB2=gB1;gD2=gD1;gF2=gF1;
+      vec4 A2=texelFetch(uET,ivec2(e1,2),0);gTurb=A2.x;gBump=A2.y;gTone=A2.z;gR=A2.w;
+      if(e2>=0&&e2!=e1&&c2>0.){vec4 B0=texelFetch(uET,ivec2(e2,0),0),B1=texelFetch(uET,ivec2(e2,1),0);gC2=B0.xyz;gB2=B0.w;gD2=B1.xyz;gF2=B1.w;
+        gW2=smoothstep(0.,1.,c2/(c1+c2)*2.)*.5;
+        vec4 B2=texelFetch(uET,ivec2(e2,2),0);gTurb=mix(gTurb,B2.x,gW2);gBump=mix(gBump,B2.y,gW2);gTone=mix(gTone,B2.z,gW2);gR=mix(gR,B2.w,gW2);}
+      const int ST=44;float dz=(uZ.x-uZ.y)/float(ST);
+      float z=uZ.x,fmax=0.,zmax=uZ.x,prevz=z;bool hit=false;
+      for(int k=0;k<ST;k++){float f=field(vec3(p,z));if(f>fmax){fmax=f;zmax=z;}
+        if(f>uTau){hit=true;break;}prevz=z;z-=dz;}
+      if(hit){float a=prevz,b=z;for(int k=0;k<5;k++){float m=.5*(a+b);if(field(vec3(p,m))>uTau)b=m;else a=m;}zmax=b;}
+      vec3 x=vec3(p,zmax);
+      float e=gR*.012;
+      vec3 g=vec3(fieldRaw(x+vec3(e,0,0))-fieldRaw(x-vec3(e,0,0)),fieldRaw(x+vec3(0,e,0))-fieldRaw(x-vec3(0,e,0)),fieldRaw(x+vec3(0,0,e))-fieldRaw(x-vec3(0,0,e)));
+      vec3 N=normalize(-g+vec3(0.,0.,1e-6));
+      float hs=0.,ws=0.;
+      for(int k=0;k<${LIMAX};k++){if(k>=LN)break;int i=LI[k];vec4 a=PA(i);vec4 b=PB(i);vec3 d=x-a.xyz;float w=b.x*kern(dot(d,d),a.w)+1e-6;hs+=w*b.y;ws+=w;}
+      float heat=hs/max(ws,1e-6);
+      vec3 L=normalize(Ld);float occ=0.;
+      for(int k=1;k<=6;k++){float f=fieldRaw(x+L*gR*.07*float(k));occ+=smoothstep(uTau*.8,uTau*1.6,f);}
+      occ/=6.;
+      float n1=fbm((p-gC1.xy)/gR*2.2*gF1+vec2(uSeed*.13)+gD1.xy);
+      if(gW2>0.)n1=mix(n1,fbm((p-gC2.xy)/gR*2.2*gF2+vec2(uSeed*.13)+gD2.xy),gW2);
+      float sh=dot(N,L)*.8+.2-occ*.7+(n1-.5)*.55*gTone;
+      float ht=heat+(n1-.5)*.45;
+      float cov=hit?1.:clamp(1.-(uTau-fmax)/max(fwidth(fmax),1e-4),0.,1.);
+      // the ground cuts the mass as a clean 2D edge (anti-aliased over one pixel) instead of thinning the density near it
+      if(uGroundOn>.5){float gw=length(vec2(uCamI[0][1],uCamI[1][1]))*px2;cov*=clamp((worldY(x)-uGround)/max(gw,1e-5)+.5,0.,1.);}
+      vec3 c;
+      if(uRaw>.5){
+        vec3 tint=mix(vec3(.55,.55,.53),mix(vec3(1.,.55,.15),vec3(1.,.97,.6),clamp(ht-.6,0.,1.)*2.),clamp((ht-.25)*2.5,0.,1.));
+        c=tint*(.35+.75*clamp(sh,0.,1.));
+      }else{
+        float tl=mix(.6,.32,clamp((ht-.55)*1.6,0.,1.));
+        vec3 lit=mix(YEL,HOT,aa(ht-1.08));vec3 deep=mix(ORA,MAG,aa(ht-.95));
+        vec3 fire=mix(ORA,lit,aa(sh-tl));fire=mix(deep,fire,aa(sh-(tl-.42)));
+        vec3 warm=mix(SMK,ORA,aa(sh-.45));vec3 smk=mix(SMD,SMK,aa(sh-.34));
+        c=mix(smk,warm,aa(ht-.3));c=mix(c,fire,aa(ht-.52));
+      }
+      if(uHiOn>.5&&e1==uHi)c=mix(c,vec3(1.),.62);
+      col=mix(col,c,cov);ecol=c;EA=cov;
+    }
+  }
+  if(uAlpha>.5){o=vec4(ecol,EA);return;}
+  col=mix(col,uWhite.rgb,uWhite.a);
+  o=vec4(col,1.);
+}`;
+function shd(t,src){const s=gl.createShader(t);gl.shaderSource(s,src);gl.compileShader(s);if(!gl.getShaderParameter(s,gl.COMPILE_STATUS))throw new Error(gl.getShaderInfoLog(s));return s}
+const prog=gl.createProgram();gl.attachShader(prog,shd(gl.VERTEX_SHADER,VS));gl.attachShader(prog,shd(gl.FRAGMENT_SHADER,FS));gl.linkProgram(prog);
+if(!gl.getProgramParameter(prog,gl.LINK_STATUS))throw new Error(gl.getProgramInfoLog(prog));
+gl.useProgram(prog);
+const buf=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,buf);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,3,-1,-1,3]),gl.STATIC_DRAW);
+const al=gl.getAttribLocation(prog,'a');gl.enableVertexAttribArray(al);gl.vertexAttribPointer(al,2,gl.FLOAT,false,0,0);
+const U={};['uCamI','uPiv','uRes','uPT','uET','uN','uNE','uSeed','uScale','uTau','uTurb','uTone','uDark','uRaw','uGround','uGroundOn','uBump','uShake','uZ','uWhite','uAlpha','uBgCol','uHi','uHiOn'].forEach(n=>U[n]=gl.getUniformLocation(prog,n));
+function mkTex(unit,w,h){const t=gl.createTexture();gl.activeTexture(gl.TEXTURE0+unit);gl.bindTexture(gl.TEXTURE_2D,t);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.NEAREST);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.NEAREST);
+  gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA32F,w,h,0,gl.RGBA,gl.FLOAT,new Float32Array(w*h*4));return t}
+const texP=mkTex(0,MAXT,2),texE=mkTex(1,MAXE,3);
+gl.uniform1i(U.uPT,0);gl.uniform1i(U.uET,1);
+
+// ================= scene: explosions placed in time and space =================
+const GROUND_Y=-0.62;
+// fixed camera: yaw around the world's vertical axis, then pitch (positive = looking down from above)
+const CAM_PIV=[0,-0.15,0]; // orbit centre: about the middle of a typical blast, so it stays framed when seen from above
+function camR(){const y=S.camYaw*Math.PI/180,p=S.camPitch*Math.PI/180,cy=Math.cos(y),sy=Math.sin(y),cp=Math.cos(p),sp=Math.sin(p);
+  return[[cy,0,sy],[sp*sy,cp,-sp*cy],[-cp*sy,sp,cp*cy]]}
+function toCam(v,R){R=R||camR();const a=v[0]-CAM_PIV[0],b=v[1]-CAM_PIV[1],c=v[2]-CAM_PIV[2];
+  return[R[0][0]*a+R[0][1]*b+R[0][2]*c+CAM_PIV[0],R[1][0]*a+R[1][1]*b+R[1][2]*c+CAM_PIV[1],R[2][0]*a+R[2][1]*b+R[2][2]*c+CAM_PIV[2]]}
+function camDirToWorld(v,R){R=R||camR();return[R[0][0]*v[0]+R[1][0]*v[1]+R[2][0]*v[2],R[0][1]*v[0]+R[1][1]*v[1]+R[2][1]*v[2],R[0][2]*v[0]+R[1][2]*v[1]+R[2][2]*v[2]]}
+// a point on the screen -> the spot on the ground under it (seen nearly edge-on, the ground plane through the pivot's depth)
+function screenToGround(sx,sy){const R=camR();const a=sx-CAM_PIV[0],b=sy-CAM_PIV[1];
+  const k=R[2][1];let zc=0;if(Math.abs(k)>0.17)zc=Math.max(-2.5,Math.min(2.5,-(R[0][1]*a+R[1][1]*b)/k));
+  const w=camDirToWorld([a,b,zc],R);return[w[0]+CAM_PIV[0],w[2]+CAM_PIV[2]]}
+const SC=()=>0.88*S.size;
+const TOTAL=()=>Math.round(S.videoSec*24);
+const tauOf=()=>0.55-0.35*S.blend;
+// settings that belong to each explosion (its detail panel); everything else in S is shared
+const PKEYS=['heatLife','heatDelay','edgeCool','size','lobes','jet','blend','spread','bump','turb','tone','rise','settle','dbCount','dbSpeed','dbGrav','dbBounce'];
+const DEF={};PKEYS.forEach(k=>DEF[k]=S[k]);
+DEF.edgeCool=0.5; // fixed at the middle value; no longer exposed
+DEF.dbOn=false;DEF.dbCol='#6e6259';
+const INV={heatLife:2.8}; // sliders shown reversed: value on screen = INV - stored value
+const TAU_G=0.4;
+// run fn as if the shared settings were this explosion's own
+function usingParams(ex,fn){const saved={};for(const k of PKEYS){saved[k]=S[k];S[k]=(ex.p||DEF)[k]}try{return fn()}finally{Object.assign(S,saved)}}
+const makeParts=ex=>usingParams(ex,()=>genParts(ex.seed));
+// names follow creation order with no gaps: A, B, C… are reassigned whenever one is removed
+function letterOf(i){let n=i,s='';do{s=String.fromCharCode(65+n%26)+s;n=Math.floor(n/26)-1}while(n>=0);return s}
+function relabel(){explosions.forEach((e,i)=>e.name=letterOf(i))}
+const nextName=()=>letterOf(explosions.length);
+// motion that keeps going but keeps slowing down: elapsed "slow time" approaches a ceiling
+const slow=t=>S.settle*(1-Math.exp(-Math.max(t,0)/S.settle));
+let explosions=[];
+function defaultScene(){explosions=[{x:0,y:-0.22,spawn:2,seed:S.seed,base:true}].map(e=>Object.assign(e,{parts:genParts(e.seed)}))}
+
+function genParts(seed){
+  const r=rng(seed*9973+17);const parts=[];const ground=S.mode==='ground';
+  const MAXP=Math.floor(MAXT/MAXE);
+  const randDir=()=>{const u=r()*2-1,a=r()*Math.PI*2,s=Math.sqrt(1-u*u);return[Math.cos(a)*s,u,Math.sin(a)*s]};
+  const norm=v=>{const l=Math.hypot(v[0],v[1],v[2])||1;return[v[0]/l,v[1]/l,v[2]/l]};
+  for(let i=0;i<6;i++){let d=randDir();if(ground)d[1]=Math.abs(d[1])*0.6+0.1;
+    parts.push({d:norm(d),dist:0.08+0.25*r(),sg:0.26+0.06*r(),k:6+2*r(),h0:1.2,edge:0,ph:r()*6.28,birth:0,core:true})}
+  const jets=[];for(let i=0;i<3+Math.floor(r()*2);i++){let d=randDir();if(ground)d[1]=Math.abs(d[1])*0.5+0.1;jets.push({d:norm(d),a:(0.25+0.35*r())*S.jet})}
+  const reach=d=>{let v=0.78+0.12*r();for(const j of jets){const c=Math.max(0,d[0]*j.d[0]+d[1]*j.d[1]+d[2]*j.d[2]);v+=j.a*Math.pow(c,5)}return v};
+  const NSTEM=ground?7:0,NSURGE=ground?8:0;const cap=MAXP-(S.second?6:0)-NSTEM-NSURGE;const nl=Math.min(S.lobes*2,Math.floor(cap*0.4));
+  const big=[];
+  for(let i=0;i<nl;i++){
+    const u=1-2*(i+0.5)/nl,a=i*2.39996+r()*0.7,sq=Math.sqrt(1-u*u);
+    let d=norm([Math.cos(a)*sq+(r()-.5)*.25,u+(r()-.5)*.25,Math.sin(a)*sq+(r()-.5)*.25]);
+    if(ground){d[1]=0.08+Math.abs(d[1])*0.9;d=norm(d)}
+    big.push({d,dist:reach(d)*0.6,sg:0.2+0.14*r()});
+  }
+  if(ground){for(let i=0;i<3;i++){const a=r()*Math.PI*2;big.push({d:norm([Math.cos(a),0.05,Math.sin(a)*0.7]),dist:0.6+0.15*r(),sg:0.2+0.05*r()})}}
+  const edgeOf=(d,dist)=>clamp(0.55*(1-Math.max(d[2],0))+0.6*clamp(dist-0.55,0,1));
+  for(const b of big)if(parts.length<cap)parts.push({d:b.d,dist:b.dist,sg:b.sg,k:(6+2.5*r())*(0.8+0.35*b.dist),h0:1.03+0.08*r(),edge:edgeOf(b.d,b.dist),ph:r()*6.28,birth:0});
+  let gi=0;
+  while(parts.length<cap&&gi<big.length*3){
+    const b=big[gi%big.length];gi++;
+    const d=norm([b.d[0]+(r()-.5)*.6,b.d[1]+(r()-.5)*.6,b.d[2]+(r()-.5)*.6]);
+    if(ground&&d[1]<0.03)d[1]=0.03;
+    const dist=b.dist+b.sg*(0.35+0.4*r());const sg=b.sg*(0.42+0.25*r());
+    parts.push({d,dist,sg,k:(6+2.5*r())*(0.8+0.35*dist),h0:1.0+0.08*r(),edge:edgeOf(d,dist),ph:r()*6.28,birth:0});
+  }
+  // stem: flared foot of dust drawn up into the rising fireball
+  for(let i=0;i<NSTEM;i++){const si=i/(NSTEM-1);parts.push({stem:true,si,d:[0,1,0],dist:0,sg:0.11+0.16*Math.pow(1-si,3)+0.08*si,k:4,h0:1.08-0.25*si*0,edge:0.35+0.3*(1-si),ph:r()*6.28,birth:0.1+0.03*i,core:si>0.6})}
+  // base surge: a low dusty ring that rolls out along the ground and slows down
+  for(let i=0;i<NSURGE;i++){const a=i/NSURGE*Math.PI*2+r()*0.6;parts.push({surge:true,a,d:[0,0,0],dist:0.6+0.25*r(),sg:0.21+0.05*r(),k:3,h0:0.6,edge:1,ph:r()*6.28,birth:0.35+0.1*r()})}
+  if(S.second)[1.0,1.5].forEach(tb=>{const a=r()*Math.PI*2;
+    for(let j=0;j<3;j++){const d=norm([Math.cos(a)*0.55+(r()-.5)*.35,Math.sin(a)*0.45+0.15+(r()-.5)*.35,0.8]);
+      parts.push({d,dist:0.4+0.15*r(),sg:0.09+0.04*r(),k:12,h0:1.28,edge:0.1,ph:r()*6.28,birth:tb+j*0.05,second:true})}});
+  return parts.slice(0,MAXP);
+}
+function originOf(ex){return S.mode==='ground'?[ex.x,GROUND_Y+SC()*0.05]:[ex.x,ex.y]}
+function cloudPos(ex,te){
+  const ground=S.mode==='ground';const o=originOf(ex);
+  const rise=ground?S.rise*SC()*1.0*Math.pow(slow(te-0.12),1.15):S.rise*SC()*0.2*Math.pow(slow(te-0.25),1.3);
+  return[o[0],o[1]+rise,ex.z||0];
+}
+// writes one explosion's particles at local time te into the shared buffers
+function simulateOne(ex,ei,te,A,B,n,bounds,inf){
+  const R=SC(),ground=S.mode==='ground';const cpos=cloudPos(ex,te);
+  const KS=1/Math.sqrt(1-Math.cbrt(tauOf()));const st=slow(te);
+  for(const p of ex.parts){
+    if(n>=MAXT)break;
+    const lt=te-p.birth;if(lt<0)continue;
+    const k=p.k*S.punch;
+    const e=1-Math.exp(-k*lt),s=1-Math.exp(-0.8*lt);
+    const reach=p.dist*R*(0.86*e+0.32*s);
+    let x=p.d[0]*reach*S.spread,y=p.d[1]*reach,z=p.d[2]*reach;
+    // directional blast: puffs facing the push are thrown further, the whole mass is carried along it and slows down
+    if(ex.fm>0&&!p.stem&&!p.surge){const fz=ex.fz||0;const al=p.d[0]*ex.fx+p.d[1]*ex.fy+p.d[2]*fz;const mul=1+(ground&&ex.fy>0?0.3:0.75)*ex.fm*Math.max(al,0)-0.3*ex.fm*Math.max(-al,0);
+      x*=mul;y*=mul;z*=mul;const push=R*ex.fm*(1.0*e+0.5*s);x+=ex.fx*push;z+=fz*push;
+      // on the ground an upward push only stretches the mass upward: the higher a puff already is, the more it is lifted; the foot stays on the ground
+      if(ground&&ex.fy>0){const h=Math.max((cpos[1]-GROUND_Y)+y,0);y+=h*ex.fy*ex.fm*0.55*(0.8*e+0.2*s);}else y+=ex.fy*push;}
+    if(p.stem){const top=cpos[1]-R*0.05-GROUND_Y;y=GROUND_Y+Math.max(top,0)*p.si*(0.4+0.6*e)-cpos[1];x=Math.sin(st*1.3+p.ph)*R*0.05*p.si;z=0}
+    if(p.surge){const rr=p.dist*R*(0.12+0.95*(1-Math.exp(-1.0*lt)));x=Math.cos(p.a)*rr*S.spread-cpos[0]+originOf(ex)[0];y=GROUND_Y+p.sg*R*0.6-cpos[1];z=Math.sin(p.a)*rr*0.5}
+    const t2=Math.max(te-0.3,0);
+    if(S.rise>0&&t2>0&&!p.stem&&!p.surge){
+      const rh=Math.hypot(x,z)||1e-6,hx=x/rh,hz=z/rh;
+      const r0=R*(ground?0.42:0.55),y0=R*(ground?0.22:0.12);
+      const dr=rh-r0,dy=y-y0;const dist2=(dr*dr+dy*dy)/(R*R*0.6);
+      const ang=-S.rise*(ground?1.7:0.8)*Math.pow(slow(t2),1.05)*Math.exp(-dist2*0.8);
+      const ca=Math.cos(ang),sa=Math.sin(ang);
+      const ndr=dr*ca-dy*sa,ndy=dr*sa+dy*ca;
+      const nrh=Math.max(r0+ndr,R*0.02);x=hx*nrh;z=hz*nrh;y=y0+ndy;
+    }
+    x+=Math.sin(st*1.9+p.ph)*R*0.02;y+=Math.cos(st*1.6+p.ph)*R*0.02;
+    if(ground&&!p.stem&&!p.surge&&y<p.sg*R*0.3-(cpos[1]-originOf(ex)[1]))y=p.sg*R*0.3-(cpos[1]-originOf(ex)[1]);
+    let sg=p.sg*R*KS*(0.3+0.7*e)*(1+0.32*s);
+    const life=1.25*S.heatLife*(1-0.7*S.edgeCool*p.edge)*(p.second?0.7:1)*(p.core?1.35:1);
+    const hold=S.heatDelay*(1-0.5*S.edgeCool*p.edge);
+    let heat=p.h0*Math.exp(-Math.max(lt-hold,0)/Math.max(life,0.05));
+    let X=cpos[0]+x,Y=cpos[1]+y,Z=cpos[2]+z;
+    for(const b of inf){
+      const dx=X-b.x,dy=Y-b.y,dz=Z-b.z,d=Math.hypot(dx,dy,dz)||1e-6;const fall=Math.exp(-Math.pow(d/(1.35*R),2));if(fall<1e-3)continue;
+      const kick=1-Math.exp(-6*b.t);
+      {const lift=dy/d*R*0.22*fall*kick+R*0.1*fall*slow(b.t)*S.rise;const h=Y-GROUND_Y;
+      X+=dx/d*R*0.22*fall*kick;Y+=ground&&lift>0?lift*clamp(h/(R*1.1)):lift;Z+=dz/d*R*0.15*fall*kick;}
+      heat=Math.max(heat,0.75*fall*Math.exp(-b.t/0.55)*(1-0.5*p.edge));
+    }
+    if(ground&&Y<GROUND_Y+sg*0.2)Y=GROUND_Y+sg*0.2;
+    A[n*4]=X;A[n*4+1]=Y;A[n*4+2]=Z;A[n*4+3]=sg;B[n*4]=TAU_G/tauOf();B[n*4+1]=heat;B[n*4+2]=ei;
+    bounds.zf=Math.max(bounds.zf,Z+sg);bounds.zb=Math.min(bounds.zb,Z-sg);n++;
+  }
+  return n;
+}
+
+// ================= render =================
+let EXPORT=false;
+// blinking highlight for an explosion picked from the list
+const blink={ex:null,t0:0,dur:1300};
+const blinkOn=()=>{if(!blink.ex)return false;const t=performance.now()-blink.t0;return t<blink.dur&&Math.floor(t/160)%2===0};
+const hexRGB=h=>[parseInt(h.slice(1,3),16)/255,parseInt(h.slice(3,5),16)/255,parseInt(h.slice(5,7),16)/255];
+function render(f){
+  if(camKeys.length)S.camYaw=yawAt(f);
+  const R=SC();
+  const live=explosions.filter(ex=>f>=ex.spawn).slice(-MAXE);
+  const pd=new Float32Array(MAXT*8),ed=new Float32Array(MAXE*12);
+  const A=pd.subarray(0,MAXT*4),B=pd.subarray(MAXT*4);
+  let n=0;const bounds={zf:-9,zb:9};
+  let sx=0,sy=0,white=0;
+  // hidden explosions are not drawn, but they still push and reheat the others (their influence is taken from `live`)
+  const drawn=live.filter(e=>!e.hidden);
+  drawn.forEach((ex,ei)=>{
+    const te=(f-ex.spawn)/24;
+    const inf=live.filter(o=>o.spawn>ex.spawn).map(o=>{const oo=usingParams(o,()=>originOf(o));return{x:oo[0],y:oo[1],z:o.z||0,t:(f-o.spawn)/24}});
+    const n0=n;
+    n=usingParams(ex,()=>simulateOne(ex,ei,te,A,B,n,bounds,inf));
+    // layer order: the higher the layer, the nearer to the camera, so it is drawn in front
+    const ER=usingParams(ex,()=>SC());
+    const c=usingParams(ex,()=>cloudPos(ex,te)),st=usingParams(ex,()=>slow(te));
+    {const q=ex.p||DEF;ed[MAXE*8+ei*4]=q.turb*0.45;ed[MAXE*8+ei*4+1]=q.bump;ed[MAXE*8+ei*4+2]=q.tone;ed[MAXE*8+ei*4+3]=ER;}
+    ed[ei*4]=c[0];ed[ei*4+1]=c[1];ed[ei*4+2]=c[2];
+    ed[ei*4+3]=ER*(0.35+0.65*(1-Math.exp(-7*S.punch*te)))*(1+0.25*st);
+    ed[MAXE*4+ei*4]=(ex.seed%13)*0.71;ed[MAXE*4+ei*4+1]=-st*0.45;ed[MAXE*4+ei*4+2]=st*0.25;
+    {const t=clamp((te-0.4)/1.2);ed[MAXE*4+ei*4+3]=S.mode==='ground'?1:0.75+0.25*t*t*(3-2*t);}
+    const df=f-ex.spawn;
+    // camera shake per explosion: a downward thump on the first frame, then a bouncing, decaying jolt
+    if(ex.shake!==false&&(ex.shakeAmt??1)>0){
+      const k=ex.shakeAmt??1,len=Math.round(5+7*k),a0=R*0.06*k*(1+0.5*(ex.fm||0));
+      if(df===0)sy-=a0*1.25;
+      else if(df<len){const env=Math.exp(-3.2*df/len),sg=df%2?-1:1;
+        sx+=a0*env*(hash(f,11+ei)-.5)*1.3+a0*env*0.35*(ex.fx||0)*sg;
+        sy+=a0*env*sg*(0.55+0.45*hash(f,23+ei));}
+    }
+  });
+  // everything was simulated in the world; now seen through the camera
+  {const CR=camR();bounds.zf=-9;bounds.zb=9;
+   for(let i=0;i<n;i++){const c=toCam([A[i*4],A[i*4+1],A[i*4+2]],CR);A[i*4]=c[0];A[i*4+1]=c[1];A[i*4+2]=c[2];
+     bounds.zf=Math.max(bounds.zf,c[2]+A[i*4+3]);bounds.zb=Math.min(bounds.zb,c[2]-A[i*4+3])}
+   for(let ei=0;ei<drawn.length;ei++){const c=toCam([ed[ei*4],ed[ei*4+1],ed[ei*4+2]],CR);ed[ei*4]=c[0];ed[ei*4+1]=c[1];ed[ei*4+2]=c[2]}
+   gl.uniformMatrix3fv(U.uCamI,false,new Float32Array([CR[0][0],CR[0][1],CR[0][2],CR[1][0],CR[1][1],CR[1][2],CR[2][0],CR[2][1],CR[2][2]]));
+   gl.uniform3f(U.uPiv,CAM_PIV[0],CAM_PIV[1],CAM_PIV[2]);}
+  gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,texP);gl.texSubImage2D(gl.TEXTURE_2D,0,0,0,MAXT,2,gl.RGBA,gl.FLOAT,pd);
+  gl.activeTexture(gl.TEXTURE1);gl.bindTexture(gl.TEXTURE_2D,texE);gl.texSubImage2D(gl.TEXTURE_2D,0,0,0,MAXE,3,gl.RGBA,gl.FLOAT,ed);
+  gl.viewport(0,0,glc.width,glc.height);gl.uniform2f(U.uRes,glc.width,glc.height);
+  gl.uniform1i(U.uN,n);gl.uniform1i(U.uNE,drawn.length);
+  gl.uniform1f(U.uSeed,(S.seed%997)*0.731);gl.uniform1f(U.uScale,R);gl.uniform1f(U.uTau,TAU_G);
+  gl.uniform1f(U.uTurb,S.turb*0.45);gl.uniform1f(U.uTone,S.tone);gl.uniform1f(U.uBump,S.bump);
+  gl.uniform1f(U.uDark,S.dark?1:0);gl.uniform1f(U.uRaw,S.view==='raw'?1:0);
+  gl.uniform1f(U.uGround,GROUND_Y);gl.uniform1f(U.uGroundOn,S.mode==='ground'?1:0);
+  gl.uniform2f(U.uShake,sx,sy);gl.uniform2f(U.uZ,n?bounds.zf:1,n?bounds.zb:-1);
+  const wc=hexRGB(S.whiteCol);gl.uniform4f(U.uWhite,wc[0],wc[1],wc[2],white);
+  {const b=hexRGB(S.bgCol);gl.uniform3f(U.uBgCol,b[0],b[1],b[2]);}
+  {const hi=blink.ex?drawn.indexOf(blink.ex):-1;gl.uniform1i(U.uHi,hi);gl.uniform1f(U.uHiOn,hi>=0&&blinkOn()?1:0);}gl.uniform1f(U.uAlpha,1);
+  gl.clearColor(0,0,0,0);gl.clear(gl.COLOR_BUFFER_BIT);
+  gl.drawArrays(gl.TRIANGLES,0,3);
+  drawDebris(f,sx,sy);
+}
+
+// ================= playback & UI =================
+let cur=0,playing=true,speed=1,acc=0,last=0;
+const el=id=>document.getElementById(id);
+function readout(){const t=TOTAL();el('rFrame').textContent=String(cur).padStart(3,'0');el('rTotal').textContent=t;el('rSec').textContent=(cur/24).toFixed(2);
+  el('rCount').textContent=explosions.length;const sc=el('scrub');sc.max=t-1;sc.value=cur}
+let listSig='',selected=null,dragEx=null;
+function renderList(){
+  const sig=explosions.map(e=>e.name+':'+e.seed+':'+e.spawn).join(',')+'|'+(selected?selected.name:'')+'|'+LANG;if(sig===listSig)return;listSig=sig;
+  const ol=document.getElementById('exList');if(!ol)return;ol.innerHTML='';
+  // newest / top layer first
+  [...explosions].reverse().forEach(ex=>{
+    const nm=ex.name;
+    const li=document.createElement('li');if(ex===selected)li.classList.add('sel');
+    const no=document.createElement('span');no.className='no';no.textContent=nm;
+    const meta=document.createElement('span');meta.className='meta';
+    const force=ex.fm>0?`${t('force')} <b>${Math.round(ex.fm*100)}%</b> <span class="dir" style="transform:rotate(${(-Math.atan2(ex.fy,ex.fx)*180/Math.PI).toFixed(0)}deg)">→</span>`:`${t('force')} <b>${t('none')}</b>`;
+    meta.innerHTML=`F <b>${String(ex.spawn).padStart(3,'0')}</b> · ${t('posX')} <b>${ex.x>=0?'+':''}${ex.x.toFixed(2)}</b> · ${force}`;
+    const ctl=document.createElement('div');ctl.className='ctl';
+    const vis=document.createElement('button');vis.type='button';vis.className='vis';
+    const updVis=()=>{const on=!ex.hidden;vis.innerHTML=(on?EYE_OPEN:EYE_SHUT)+`<span>${t(on?'on':'off')}</span>`;vis.setAttribute('aria-pressed',on);vis.setAttribute('aria-label',t(on?'ariaHide':'ariaUnhide',nm));li.classList.toggle('off',!on)};
+    vis.onclick=()=>{ex.hidden=!ex.hidden;updVis();show()};
+    const lab=document.createElement('label');const cb=document.createElement('input');cb.type='checkbox';cb.checked=ex.shake!==false;lab.append(cb,t('shake'));
+    const rg=document.createElement('input');rg.type='range';rg.min='0';rg.max='2';rg.step='0.05';rg.value=ex.shakeAmt??1;rg.setAttribute('aria-label',t('ariaShake',nm));
+    const out=document.createElement('output');const upd=()=>{out.textContent=Math.round((ex.shakeAmt??1)*100)+'%';rg.disabled=!cb.checked};upd();
+    cb.onchange=()=>{ex.shake=cb.checked;upd();show()};rg.oninput=()=>{ex.shakeAmt=+rg.value;upd();show()};
+    const btns=document.createElement('span');btns.className='btns';
+    const view=document.createElement('button');view.type='button';view.textContent=t('show');view.setAttribute('aria-label',t('ariaShow',nm));
+    view.onclick=()=>focusEx(ex);
+    const del=document.createElement('button');del.type='button';del.textContent=t('del');del.setAttribute('aria-label',t('ariaDel',nm));
+    del.onclick=()=>{explosions.splice(explosions.indexOf(ex),1);if(selected===ex)selected=null;relabel();show()};
+    btns.append(view,del);ctl.append(vis,lab,rg,out,btns);
+    li.append(no,meta,ctl);updVis();
+    // click the row (not its controls) to open this explosion's detail settings
+    li.onclick=e=>{if(e.target.closest('button,input,label'))return;selected=ex;show()};
+    ol.appendChild(li);
+  });
+  renderDetail();
+}
+// detail panel bound to the selected explosion
+function renderDetail(){
+  const box=document.getElementById('detail');if(!box)return;
+  if(!selected||!explosions.includes(selected)){box.hidden=true;return}
+  box.hidden=false;document.getElementById('detailTitle').textContent=t('detail',selected.name);
+  const q=selected.p;
+  for(const k of PKEYS){const i=document.getElementById(k),o=document.getElementById(k+'O');if(!i)continue;const v=INV[k]?INV[k]-q[k]:q[k];i.value=v;if(o)o.textContent=(+v).toFixed(ranges[k])}
+  document.getElementById('seed').value=selected.seed;
+  {const b=document.getElementById('dbOn'),on=!!q.dbOn;b.innerHTML=(on?EYE_OPEN:EYE_SHUT)+`<span>${t(on?'on':'off')}</span>`;b.setAttribute('aria-pressed',on);
+   ['dbCol','dbCount','dbSpeed','dbGrav','dbBounce'].forEach(k=>{document.getElementById(k).disabled=!on});
+   document.getElementById('dbCol').value=q.dbCol||'#6e6259';document.getElementById('dbColO').textContent=q.dbCol||'#6e6259'}
+}
+// ---- bookmarks: one per explosion at its start frame, stacked downward when they would collide ----
+let marksSig='',markDrag=null;
+function focusEx(ex){selected=ex;setPlaying(false);cur=Math.min(ex.spawn,TOTAL()-1);blink.ex=ex;blink.t0=performance.now();listSig='';show()}
+function renderMarks(force){
+  const box=document.getElementById('marks');if(!box)return;
+  const W=box.clientWidth,T=TOTAL();
+  const sig=explosions.map(e=>e.name+':'+e.spawn+':'+(e.hidden?1:0)).join(',')+'|'+(selected?selected.name:'')+'|'+W+'|'+T+'|'+LANG;
+  if(!force&&sig===marksSig)return;marksSig=sig;box.innerHTML='';
+  const xOf=f=>8+(W-16)*Math.min(f,T-1)/Math.max(T-1,1);
+  const rows=[];let maxRow=-1;
+  [...explosions].sort((a,b)=>a.spawn-b.spawn||explosions.indexOf(a)-explosions.indexOf(b)).forEach(ex=>{
+    const x=xOf(ex.spawn);let r=0;while(rows[r]!==undefined&&x-rows[r]<26)r++;rows[r]=x;maxRow=Math.max(maxRow,r);
+    const b=document.createElement('button');b.type='button';b.className='mark'+(ex===selected?' sel':'')+(ex.hidden?' off':'');
+    b.textContent=ex.name;b.style.left=x+'px';b.style.top=(4+r*21)+'px';
+    b.title=`${ex.name} · F ${String(ex.spawn).padStart(3,'0')}`;b.setAttribute('aria-label',t('markAria',ex.name)+' F '+ex.spawn);
+    b.addEventListener('pointerdown',e=>{e.preventDefault();b.setPointerCapture(e.pointerId);markDrag={ex,b,x0:e.clientX,moved:false}});
+    b.addEventListener('pointermove',e=>{
+      if(!markDrag||markDrag.b!==b)return;
+      if(!markDrag.moved&&Math.abs(e.clientX-markDrag.x0)<4)return;
+      if(!markDrag.moved){markDrag.moved=true;selected=ex;setPlaying(false);b.classList.add('dragging')}
+      // dragging re-times the explosion: everything is recomputed from the new start frame
+      const r=box.getBoundingClientRect();const f=Math.round(clamp((e.clientX-r.left-8)/Math.max(r.width-16,1))*(TOTAL()-1));
+      if(f!==ex.spawn){ex.spawn=f;cur=f;listSig='';show()}
+      b.style.left=xOf(ex.spawn)+'px';b.title=`${ex.name} · F ${String(ex.spawn).padStart(3,'0')}`;
+    });
+    const end=()=>{if(!markDrag||markDrag.b!==b)return;const moved=markDrag.moved;markDrag=null;if(moved){marksSig='';show()}else focusEx(ex)};
+    b.addEventListener('pointerup',end);b.addEventListener('pointercancel',()=>{markDrag=null;marksSig='';show()});
+    box.appendChild(b);
+  });
+  box.style.height=(maxRow<0?0:8+(maxRow+1)*21)+'px';
+}
+function show(){renderList();if(!markDrag)renderMarks();render(cur);readout();renderCam();const h=document.getElementById('hint');if(h)h.hidden=explosions.length>0}
+let lastBlink=null;
+function tick(ts){
+  if(blink.ex){const on=blinkOn(),live=performance.now()-blink.t0<blink.dur;if(on!==lastBlink){lastBlink=on;show();drawArrow()}if(!live){blink.ex=null;lastBlink=null;show();drawArrow()}}
+  if(playing){if(!last)last=ts;acc+=(ts-last)/1000*24*speed;last=ts;let mv=false;if(acc>=1){acc=Math.min(acc-1,1);cur=(cur+1)%TOTAL();mv=true}if(mv)show()}else last=ts;requestAnimationFrame(tick)}
+function setPlaying(v){playing=v;el('play').textContent=v?t('pause'):t('play');acc=0}
+function regen(){explosions.forEach(ex=>ex.parts=makeParts(ex));cur=Math.min(cur,TOTAL()-1);show()}
+
+// ---------------- debris: textured shards flying in 3D, under gravity, bouncing on the ground ----------------
+const SHARD_SRC=['data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAAABHNCSVQICAgIfAhkiAAAAAlwSFlzAAALEwAACxMBAJqcGAAAAhxJREFUeNrt2jtrFVEUhuHHGEVtjAiileIF/QGCtWAhaGEhgmAl2Fn6C8QqvQhaKRaCVjZqp4JIwCCIhQgJHA0qxtwkJt6SY+EUIWBus7NnmbNfGDjF3L53rZmz98xQKBQKhUKhUCh0JOsyHqsbV3EMAxislrm/J9aigG6cwhUcXGTdkTky5soZwBBm/ycB3TiDy9iXYH8/0VqgeyYjCTiKa0uoeEo+zxMzgC7cXI3O+RfbcQftIMvTnPeTs1UV2oGW0zmCb8btYMHbeJIj/E70Bww/iyOrHX4bXgUM38aNHNV/FDT8F2zNIeB9UAEXc931HwQM38LG5YToqiHgecC5TW81YszCiWDVn0TPckPU6YC3wap/F+M5BQwHE3CricnQaDUeaJqp6q/vd84OgB9Bqv9sJeFTCPgYRMD9lW5YV8BYEAF9TQmI0AEzeN2UgPEAAgYx3ZSAkQACPtXZuK6A0QAChjtdQKMdEGE0+KFJAVOdLmCs0wVEuAS+NilgOoCAd00KmGhYwncrfCeYSoC6J1BzFHpSA6/U59PSzOOvw0EmYvoyh5/B8VQnn+ISyH0P6MVDgXicsfovsCXlyafogF+ZRM/iQurRZwoBuR6P38PL1DtN8YnMIexeRHIPdmEP9lfrH8CGJR7jW3WcIWuITVWoc7iONwtc+5d0CHtx3t/3+8NV+H6s14F0VYOdHQqFQqFQKBQKhUJq/gDE7AhrFzmkIgAAAABJRU5ErkJggg==','data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAAABHNCSVQICAgIfAhkiAAAAAlwSFlzAAALEwAACxMBAJqcGAAAAkdJREFUeNrt2k2ITWEcx/HPzG3mFrOQhSmyEGXBkCZNjWRD2ZksRDNlJ0kWZCHFjCwkpViykOwkmdQMG1lJuUl5WYiiKTLZeGkWg7GYc+vmZZqXe855zr3Pt37be/t/73me+3/+5yESiUQikUgk0py0pPCZS7ApyWoM4VOjClyGnTiBm3iDqT8ygs2NUOxK7Ep+0WGM/aPYmVLBPpSKVvgZjM+x2JnyHP1oK4qAoToWX5u36CuCgMMpCajmHnpDFjCQsoBqRtEVooD+jARM4RduYUuzCqjNA+xGe7Msgf9lHBewLi8Bx3IWUJsnOICOLAWcDkhANV9wDTvQmraAwQAF1GYMp9CZloCrgQuo5jsuYWO9BdwoiIBqPs+luFZNzmwEvCtYTYvqfdDqwP2CLYMV9bZawnlMFkRAaq10d9KMhC5gf1qbYCWxO4gfAe8Dq7L4km48C/QJuJ2V6fZkb/gZmIAPWT9y2/A+MAmZD1eW4m5AAk7msfm04AgmAhAwmucuvB4vcxbwLe9WfzEuJ3O+vCSsDeE/eSte5STgeCiNSRnnkuYpSwF3QuvQevAiQwEjIbapZVzMSMBAyOf2PtP3BtIqfiLr6fF86Exx1jBclAlOKaUlcbRo47k9+FpHAb0KyIZkBlmP9d+uoHTi0QIFVIo+rS7jygIEXG+Usf3BeXSPr6X4miwPtuPjLIufNH0/seFYjodFOvykNWw5NMOw5bF0br4GRxee+vu+wBpNRJvpV+HVYcteTUoPzopEIpFIJBKZB78Bub0/ljNJGFUAAAAASUVORK5CYII=','data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAAABHNCSVQICAgIfAhkiAAAAAlwSFlzAAALEwAACxMBAJqcGAAAAeVJREFUeNrt2c2LjWEYx/HPGcRiapAUystS2Sgpylr+AX8C/4Gdkg1rFuysZCErC2FlFCVGxspLQ14alCaTjLccizmnZIHO3HNf9zjXt+7FWdzP8/y+93Ndz/PchyRJkiRJkmQ4WVb5fJvQwZdWBHQqnusojmEEc3jzD+PtYsuqIWAEZ3BowPkzfxA0jS0Yx+MWS2wUl9Fd5HGhxfDb8aRC+C4etRb+AGYrhe/2yqQZDuNHxfD9sb6F8PsDgvfH3kE7dEmOB8rfEy1gDLsDBeyMFrAtuPz2RQtYHSxgM3ZECtjYyOM3tAlGczBSwPIGBOzC1mEugf4reIiAlQ2Ef4/rw9wDTuH7sAqYw9nIJtgJFnAe7yIFrAkMP2t+uy30TXBtoICTeB0tIKoEpnB60Mn/QxM8go/DKuA+Li3kAEtdwImFHqCkgG7l8DdxsSUBnaW2+qUF1NyVvYUrrQkYq/zcb44Jdba/n5W86JJ3wIZKos+1+kj6UGH1p0qXWqnOvQJfC17XNF7iBSZxFw/xqvSqldrHGx1gzswvwSZ7HzNPe5+0n2rdtqUE/O0/gTncxp1e6Ht43kLdlhKw7rffn3uBb+BaL/S3FhtXKQGrzG9GjuMqHhTuCUmSJEmSJEmSJEmSJMX4CXfcCzQhfwS5AAAAAElFTkSuQmCC','data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAAABHNCSVQICAgIfAhkiAAAAAlwSFlzAAALEwAACxMBAJqcGAAAAgZJREFUeNrtmkFLVFEUgL/RIc2ZSCVXuZG0TW4imJhAWuRE4aZgzM246QdEO+mXhP+gReCi2UjuRJhNs3GKIiytFKRcKVY0+FzMFWQYnCHfuZw773zwGBhmHud8nHvO5b0LhmEYRnJJKYjhIpBxVz/wKSQB08CgCz4LDACX3Gf2VGLZFt+d/K6n6Z4FYCWUCtoDopivNyEtoe8CAurANV8J9Jzz/zsCMfUCC6FUQFmgAiLgDzASQgX8EIqrD3gagoBNwdhKIQj4IhjbJHBbu4D3wvHNa2+CaeCfUCOMgJ9up6i2AuouSCmuADOaBQB8Fq6yh9oFVIUFzLmxmFgBGeCOZgHvPDTbe5onQS9wKDgJImBN+zisCAuIgDGtS+BEgDSPNAuoeRAwrXkJ3PWwBOrAqNYKWPfUbGc1V8EvD1VQ01oB4Odx9g0gp1XAV0+VNqFVwLYnASmtAsrArgcB45ob4SDwUrgRviIACsCWkIAqgTAELAkI+EvjJWowvHC7uDgl3CIwplyDjEtAUeMUOItVIA9sxHS/6wTKVeBjDBWwRMAMA8vnFFAhcNLAYrfvBTrhOXD0H8n30UUUaZwH6CT51+g42CWyc9xvk/wHGoesupabbR6q5EkAOeCgRfJvSRD3gd9NAp6QMB6ckvANuEACeexG5DMSTAm4jGEYhmEYhmEYhhEvx6hPrx6J+etYAAAAAElFTkSuQmCC','data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAAABHNCSVQICAgIfAhkiAAAAAlwSFlzAAALEwAACxMBAJqcGAAAAkhJREFUeNrt2r9qVEEUx/HPagyKGjXRRKtgpSJpjH+wF5s0guAz+AAWoo2dBrTyASxSWin4AqJEDRvxb6PgnyJGBBHRKJJkLXaEoNlsNndidvbODw7Lwtx7Od85M3POzJCVlZWVlZWVVVKt70Cf9mIOv8rQgdtwAhdxGx9Rw01UOs3ZLhzCWdzAS8wHhxez66k7PIgzuIZ7mFnC2UZ2ObVQvoBbmF6Bs41spFlYrUUoD+HYAtu/imP2MO6sJYDB4OTR8DuMTe00scRUD4781bsD7T6zFtUITgdnD6S2/BQFsBVj2JHqUrOu4PPnU3a+KIB9OJd6slEEwBV0lxXACE51Qn69EgDdGO2UAmMlAC7hYFlL/j78iJin/w8bixkBo9iYWJT3x3rRUJP6u13tUawIuJroLkstBoBhnEx0on8SA0DKGd+zoi+o4HOCY/+PHS8aATW8TbT355tFwHKHwN1EAUzhWwwAbxIF8C5WKpwqgOexAHxIFEA1FoDpRAE0jdzlZnZd+Cm9w9S+sIQXjoBZ9YPHlPS6mfOt1gJTiQF4EHtDJLV5oBobwNeyA6gllgJPxgYwkxCAV/geG0BKq8CyM9dWAMwlBGB8NQCkpPtlBjCLh2UGMNlsD6DTAYy30rgTAVRbadzKDZFGleOXUCkuVDd61wjAi9UCUAvj62motCbwGJ8atO/BbmzHFuxZ5HsV9Ws2u7AhWK/6LbKK+v3BgfBcT/i/ObRrpPci9Go7q4KdAUq/f88qJ0IqnJWVlZWVlZWVtZR+Az5R/vTuQ167AAAAAElFTkSuQmCC'];
+const tintCache={};
+// recolour a shard texture (keeps its alpha) and cache it per colour
+function tinted(i,col){const k=i+col;if(tintCache[k])return tintCache[k];const img=SHARDS[i];if(!img.complete||!img.naturalWidth)return null;
+  const c=document.createElement('canvas');c.width=img.naturalWidth;c.height=img.naturalHeight;const x=c.getContext('2d');
+  x.drawImage(img,0,0);x.globalCompositeOperation='source-in';x.fillStyle=col;x.fillRect(0,0,c.width,c.height);return tintCache[k]=c}
+const SHARDS=SHARD_SRC.map(u=>{const im=new Image();im.src=u;im.onload=()=>{try{show()}catch(e){}};return im});
+const bgc=document.getElementById('bgc'),bctx=bgc.getContext('2d'),fgc=document.getElementById('fgc'),fctx=fgc.getContext('2d');
+// one shard's launch, fixed by the explosion's seed so scrubbing always shows the same flight
+function debrisSpec(ex){
+  const q=ex.p||DEF;const key=ex.seed+':'+q.dbCount+':'+ex.fx+':'+ex.fy+':'+(ex.fz||0)+':'+ex.fm;
+  if(ex._dbKey===key)return ex._db;
+  const r=rng(ex.seed*7919+3);const out=[];const n=Math.round(q.dbCount);
+  for(let i=0;i<n;i++){
+    // direction: around the drag direction (with depth), or an upward hemisphere when there was no drag
+    let dx,dy,dz;
+    if(ex.fm>0){const sp=0.55+0.35*(1-ex.fm);dx=ex.fx+(r()-.5)*2*sp;dy=ex.fy+(r()-.5)*2*sp;dz=(ex.fz||0)+(r()-.5)*2*(0.5+sp)}
+    else{const a=r()*Math.PI*2,u=0.25+0.75*r();dx=Math.cos(a)*Math.sqrt(1-u*u);dy=u;dz=Math.sin(a)*Math.sqrt(1-u*u)}
+    if(S.mode==='ground')dy=Math.abs(dy)*0.9+0.08;
+    const l=Math.hypot(dx,dy,dz)||1;
+    out.push({dx:dx/l,dy:dy/l,dz:dz/l,v:0.55+0.9*r(),tex:Math.floor(r()*SHARDS.length),size:0.015+0.021*r(),rot:r()*6.283,w:(r()-.5)*14,delay:Math.floor(r()*2),flip:r()<.5?-1:1});
+  }
+  ex._dbKey=key;ex._db=out;return out;
+}
+// integrate from the explosion's start to this frame (fixed steps, deterministic)
+// outline of each shard (convex hull, texture space -1..1, y down) so it touches, rolls and comes to rest on its real edges
+const SHARD_HULL=[[[0.734,-0.516],[0.484,0.297],[0.266,0.609],[0.172,0.609],[-0.484,0.516],[-0.547,-0.297],[-0.547,-0.359],[-0.453,-0.453],[-0.359,-0.516],[-0.141,-0.641],[-0.047,-0.641],[0.203,-0.609],[0.672,-0.547]],[[0.734,0.266],[0.672,0.516],[0.516,0.734],[0.453,0.703],[-0.672,-0.109],[-0.734,-0.172],[-0.734,-0.578],[-0.609,-0.609],[-0.266,-0.672],[0.609,-0.266],[0.641,-0.234],[0.734,0.234]],[[0.609,-0.172],[0.578,-0.078],[0.359,0.328],[0.234,0.359],[-0.422,0.484],[-0.422,-0.078],[-0.391,-0.422],[-0.203,-0.609],[-0.141,-0.641],[0.047,-0.641],[0.391,-0.609],[0.547,-0.578],[0.609,-0.266]],[[0.422,0.297],[0.266,0.516],[0.234,0.547],[-0.359,0.047],[-0.422,-0.016],[-0.484,-0.391],[-0.516,-0.609],[-0.516,-0.734],[-0.359,-0.766],[0.109,-0.766],[0.141,-0.734],[0.172,-0.672],[0.234,-0.516],[0.297,-0.328],[0.359,-0.109],[0.391,0.016],[0.422,0.234]],[[0.766,-0.078],[0.734,0.109],[0.641,0.578],[0.609,0.672],[-0.672,0.672],[-0.703,0.047],[-0.703,-0.047],[-0.609,-0.234],[-0.516,-0.391],[-0.453,-0.453],[-0.172,-0.516],[0.266,-0.609],[0.578,-0.672],[0.672,-0.672],[0.734,-0.609],[0.766,-0.234]]];
+const shapeCache={};
+function shapeOf(tex,flip){
+  const k=tex+':'+flip;if(shapeCache[k])return shapeCache[k];
+  const pts=SHARD_HULL[tex].map(([u,v])=>[u*flip,v]);
+  // lowest point below the centre for a given screen rotation (canvas rotate: clockwise, y down)
+  const low=a=>{const c=Math.cos(a),s=Math.sin(a);let m=-9;for(const [u,v] of pts){const y=u*s+v*c;if(y>m)m=y}return m};
+  const N=720,tab=new Float32Array(N);let sum=0,mn=9,mx=-9;
+  for(let i=0;i<N;i++){const v=low(i/N*Math.PI*2);tab[i]=v;sum+=v;mn=Math.min(mn,v);mx=Math.max(mx,v)}
+  // resting orientations: where the lowest point is locally lowest, i.e. a flat side lies on the ground
+  const rests=[];for(let i=0;i<N;i++){const a=tab[(i+N-1)%N],b=tab[i],c=tab[(i+1)%N];if(b<=a&&b<c)rests.push(i/N*Math.PI*2)}
+  const sh={low:a=>{const t=((a%(Math.PI*2))+Math.PI*2)%(Math.PI*2)/(Math.PI*2)*N;const i=Math.floor(t)%N;const f=t-Math.floor(t);return tab[i]*(1-f)+tab[(i+1)%N]*f},
+    mean:sum/N,bump:(mx-mn)/(sum/N),rests};
+  return shapeCache[k]=sh;
+}
+function nearestRest(sh,a){const T=Math.PI*2;let best=a,bd=9;for(const r of sh.rests){let d=((r-a)%T+T*1.5)%T-T/2;if(Math.abs(d)<bd){bd=Math.abs(d);best=a+d}}return best}
+// integrate from the explosion's start to this frame (fixed steps, deterministic)
+// rigid-body flight of one shard: its real outline hits the ground, friction and restitution act at the
+// touching corner, so it bounces, rolls, rocks and settles on a flat side by itself. Results are cached per frame.
+function debrisTrack(ex,d){
+  const q=ex.p||DEF;const R=usingParams(ex,()=>SC());const o=usingParams(ex,()=>originOf(ex));
+  const key=[o[0],o[1],ex.z||0,R,q.dbSpeed,q.dbGrav,q.dbBounce,ex.fm,S.mode].join(',');
+  if(!d._tr||d._key!==key){d._key=key;d._tr=[];d._st=null}
+  return {tr:d._tr,R,o,q};
+}
+function debrisState(ex,d,te){
+  const t=te-d.delay/24;if(t<0)return null;
+  const T=debrisTrack(ex,d),tr=T.tr,R=T.R,q=T.q;
+  const fi=Math.round(t*24);
+  if(tr[fi])return tr[fi];
+  const sh=shapeOf(d.tex,d.flip);const sz=d.size*R;const ground=S.mode==='ground';
+  const speed=R*5.2*q.dbSpeed*d.v*(1+0.6*(ex.fm||0)),g=R*4.2*q.dbGrav,e0=q.dbBounce,mu=0.55;
+  // state in world units (y up); th = counter-clockwise angle, drawn as ang = -th
+  let st=d._st;
+  if(!st){st=d._st={x:T.o[0],y:T.o[1]+R*0.12,z:ex.z||0,vx:d.dx*speed,vy:d.dy*speed,vz:d.dz*speed,th:-d.rot,w:-d.w,sleep:0,asleep:false,f:-1}}
+  const pts=SHARD_HULL[d.tex].map(([u,v])=>[u*d.flip,-v]);
+  const r2=pts.reduce((a,[u,v])=>a+u*u+v*v,0)/pts.length;
+  const sub=10,dt=1/(24*sub);
+  while(st.f<fi){
+    st.f++;
+    if(st.f>=0)for(let k=0;k<sub&&!st.asleep;k++){
+      const half=sz*(1+0.35*(st.z-(ex.z||0))),I=r2*half*half*0.5;
+      st.vy-=g*dt;const dr=Math.exp(-0.4*dt);st.vx*=dr;st.vz*=dr;
+      st.x+=st.vx*dt;st.y+=st.vy*dt;st.z+=st.vz*dt;st.th+=st.w*dt;
+      if(!ground)continue;
+      const c=Math.cos(st.th),s=Math.sin(st.th);
+      let deep=0,rx=0,ry=0,touching=0;
+      for(const [u,v] of pts){const px=(u*c-v*s)*half,py=(u*s+v*c)*half;const pen=GROUND_Y-(st.y+py);if(pen>0){touching++;if(pen>deep){deep=pen;rx=px;ry=py}}}
+      if(!touching)continue;
+      st.y+=deep; // push out of the ground
+      // contact velocity at the touching corner
+      let vcx=st.vx-st.w*ry,vcy=st.vy+st.w*rx;
+      if(vcy<0){
+        const e=Math.abs(vcy)<R*0.35?0:e0; // slow contacts don't bounce, they rest
+        const jn=-(1+e)*vcy/(1+rx*rx/I);
+        st.vy+=jn;st.w+=rx*jn/I;
+        vcx=st.vx-st.w*ry;
+        let jt=-vcx/(1+ry*ry/I);const lim=mu*jn;jt=Math.max(-lim,Math.min(lim,jt));
+        st.vx+=jt;st.w+=-ry*jt/I;
+        st.vz*=Math.exp(-6*dt);
+      }
+      // a little rolling resistance so it comes to rest instead of rocking forever
+      st.w*=Math.exp(-1.5*dt);st.vx*=Math.exp(-0.6*dt);
+      const slow=Math.abs(st.vx)+Math.abs(st.vy)<R*0.05&&Math.abs(st.w)<0.8;
+      st.sleep=slow?st.sleep+dt:0;if(st.sleep>0.25){st.asleep=true;st.vx=st.vy=st.vz=st.w=0}
+    }
+    tr[st.f]={x:st.x,y:st.y,z:st.z,ang:-st.th,sz};
+  }
+  return tr[fi];
+}
+function sizeLayers(){const dpr=window.devicePixelRatio||1;for(const c of [bgc,fgc]){const w=Math.round(c.clientWidth*dpr),h=Math.round(c.clientHeight*dpr);if(c.width!==w||c.height!==h){c.width=w;c.height=h}}}
+function drawDebris(f,sx,sy){
+  sizeLayers();
+  const W=bgc.width,H=bgc.height;
+  bctx.setTransform(1,0,0,1,0,0);bctx.fillStyle=S.bgCol;bctx.fillRect(0,0,W,H);
+  fctx.setTransform(1,0,0,1,0,0);fctx.clearRect(0,0,W,H);
+  const toPx=(x,y)=>[W/2+(x+sx)*H/2,H/2-(y+sy)*H/2];const CR=camR();
+  for(const ex of explosions){
+    const q=ex.p||DEF;if(!q.dbOn||f<ex.spawn)continue;
+    const te=(f-ex.spawn)/24;
+    const oc=toCam([ex.x,GROUND_Y,ex.z||0],CR);
+    for(const d of debrisSpec(ex)){
+      const st=debrisState(ex,d,te);if(!st)continue;
+      const img=tinted(d.tex,q.dbCol||'#6e6259');if(!img)continue;
+      // shards nearer the camera than the explosion's centre go in front of it, the rest behind
+      const c=toCam([st.x,st.y,st.z],CR),dz=c[2]-oc[2];
+      const ctx=dz>0?fctx:bctx;const persp=1+0.35*dz;
+      const [px,py]=toPx(c[0],c[1]);const s=st.sz*persp*H/2;
+      ctx.save();ctx.translate(px,py);ctx.rotate(st.ang);ctx.scale(d.flip,1);ctx.drawImage(img,-s,-s,s*2,s*2);ctx.restore();
+    }
+  }
+}
+
+
+// ---------------- camera keys: yaw keyed on the timeline; the curve between keys is edited like Unity's curve editor ----------------
+// every key has an in and out tangent (slope, degrees per frame) and optional weights (handle length, fraction of the gap).
+// tangent modes: clamped auto (default), auto, free smooth, flat, broken (each side free / linear / constant)
+let camKeys=[],camSel=null,camDrag=null,camMarksSig='';
+const sortKeys=()=>camKeys.sort((a,b)=>a.f-b.f);
+const W3=1/3;
+function newKey(f,yaw){return{f,yaw,inT:0,outT:0,inW:W3,outW:W3,wIn:false,wOut:false,mode:'clamped',lm:'free',rm:'free'}}
+function updateTangents(){
+  sortKeys();
+  camKeys.forEach((k,i)=>{const p=camKeys[i-1],n=camKeys[i+1];
+    const sl=p?(k.yaw-p.yaw)/(k.f-p.f):0,sr=n?(n.yaw-k.yaw)/(n.f-k.f):0;
+    if(k.mode==='auto'||k.mode==='clamped'){
+      let m=0;if(p&&n){m=(n.yaw-p.yaw)/(n.f-p.f);
+        if(k.mode==='clamped'){if((k.yaw-p.yaw)*(n.yaw-k.yaw)<=0)m=0;else{const lim=3*Math.min(Math.abs(sl),Math.abs(sr));m=Math.sign(m)*Math.min(Math.abs(m),lim)}}}
+      k.inT=k.outT=m;
+    }else if(k.mode==='flat'){k.inT=k.outT=0}
+    else if(k.mode==='broken'){if(k.lm==='linear')k.inT=sl;if(k.rm==='linear')k.outT=sr}
+  });
+}
+const constSeg=(a,b)=>(a.mode==='broken'&&a.rm==='constant')||(b.mode==='broken'&&b.lm==='constant');
+function segPoints(a,b){const dt=b.f-a.f,wo=a.wOut?a.outW:W3,wi=b.wIn?b.inW:W3;
+  return[wo*dt,a.yaw+a.outT*wo*dt,dt-wi*dt,b.yaw-b.inT*wi*dt,dt]}
+function yawAt(f){
+  if(!camKeys.length)return S.camYaw;
+  if(f<=camKeys[0].f)return camKeys[0].yaw;const L=camKeys[camKeys.length-1];if(f>=L.f)return L.yaw;
+  let i=0;while(camKeys[i+1].f<f)i++;const a=camKeys[i],b=camKeys[i+1];
+  if(f===b.f)return b.yaw;if(constSeg(a,b))return a.yaw;
+  const [x1,y1,x2,y2,dt]=segPoints(a,b),u=f-a.f;
+  const B=(p0,p1,p2,p3,t)=>{const s=1-t;return s*s*s*p0+3*s*s*t*p1+3*s*t*t*p2+t*t*t*p3};
+  let lo=0,hi=1,t=u/dt;for(let it=0;it<40;it++){const x=B(0,x1,x2,dt,t);if(Math.abs(x-u)<1e-7)break;if(x<u)lo=t;else hi=t;t=(lo+hi)/2}
+  return B(a.yaw,y1,y2,b.yaw,t)}
+const keyAt=f=>camKeys.find(k=>k.f===f);
+function setKey(f,yaw){let k=keyAt(f);if(!k){k=newKey(f,yaw);camKeys.push(k)}else k.yaw=yaw;updateTangents();camSel=k;return k}
+function camVars(){const cs=getComputedStyle(document.documentElement);const g=n=>cs.getPropertyValue(n).trim();return{fg:g('--fg'),muted:g('--muted'),line:g('--line'),accent:g('--accent'),panel:g('--panel')}}
+function renderCam(){
+  const yaw=Math.round(yawAt(cur));const sl=el('camYaw');sl.value=yaw;el('camYawO').textContent=yaw+'°';
+  const k=camSel&&camKeys.includes(camSel)?camSel:null;
+  el('camDel').disabled=!k;el('camClear').disabled=!camKeys.length;el('camMode').disabled=!k;if(k)el('camMode').value=k.mode;
+  if(!camDrag)renderCamMarks();drawCamGraph();
+}
+function renderCamMarks(force){
+  const box=el('camMarks');const W=box.clientWidth,T=TOTAL();
+  const sig=camKeys.map(k=>k.f).join(',')+'|'+camKeys.indexOf(camSel)+'|'+W+'|'+T;
+  if(!force&&sig===camMarksSig)return;camMarksSig=sig;box.innerHTML='';
+  const xOf=f=>8+(W-16)*Math.min(f,T-1)/Math.max(T-1,1);
+  const rows=[];let maxRow=-1;
+  camKeys.forEach((k,i)=>{
+    const x=xOf(k.f);let r=0;while(rows[r]!==undefined&&x-rows[r]<48)r++;rows[r]=x;maxRow=Math.max(maxRow,r);
+    const b=document.createElement('button');b.type='button';b.className='mark'+(k===camSel?' sel':'');
+    b.textContent='CAM#'+(i+1);b.style.left=Math.max(24,Math.min(W-24,x))+'px';b.style.top=(r*21)+'px';b.title=`CAM#${i+1} · F ${String(k.f).padStart(3,'0')} · ${Math.round(k.yaw)}°`;
+    b.addEventListener('pointerdown',e=>{if(e.button===2)return;e.preventDefault();b.setPointerCapture(e.pointerId);camDrag={k,b,x0:e.clientX,moved:false}});
+    b.addEventListener('pointermove',e=>{
+      if(!camDrag||camDrag.b!==b)return;if(!camDrag.moved&&Math.abs(e.clientX-camDrag.x0)<4)return;
+      if(!camDrag.moved){camDrag.moved=true;camSel=k;setPlaying(false);b.classList.add('dragging')}
+      const rr=box.getBoundingClientRect();const f=Math.round(clamp((e.clientX-rr.left-8)/Math.max(rr.width-16,1))*(TOTAL()-1));
+      if(f!==k.f&&!keyAt(f)){k.f=f;updateTangents();cur=f;show()}
+      b.style.left=Math.max(24,Math.min(W-24,xOf(k.f)))+'px';
+    });
+    const end=()=>{if(!camDrag||camDrag.b!==b)return;const moved=camDrag.moved;camDrag=null;camSel=k;if(!moved){setPlaying(false);cur=Math.min(k.f,TOTAL()-1)}camMarksSig='';show()};
+    b.addEventListener('pointerup',end);b.addEventListener('pointercancel',()=>{camDrag=null;camMarksSig='';show()});
+    b.addEventListener('contextmenu',e=>{e.preventDefault();camSel=k;camMarksSig='';show();keyMenu(k,e.clientX,e.clientY)});
+    box.appendChild(b);
+  });
+  box.style.height=(maxRow<0?0:4+(maxRow+1)*21)+'px';
+}
+// ---- graph ----
+const camG={pad:10,top:12,bot:14,rng:null};
+function camRange(){let lo=Infinity,hi=-Infinity;const T=TOTAL();for(let f=0;f<T;f++){const v=yawAt(f);lo=Math.min(lo,v);hi=Math.max(hi,v)}
+  for(const k of camKeys){lo=Math.min(lo,k.yaw);hi=Math.max(hi,k.yaw)}
+  const c=(lo+hi)/2,h=Math.max((hi-lo)/2,30)*1.18;return[c-h,c+h]}
+function camXY(c){const W=c.clientWidth,H=c.clientHeight,T=TOTAL(),[lo,hi]=camG.rng;
+  return{x:f=>camG.pad+(W-2*camG.pad)*f/Math.max(T-1,1),y:v=>camG.top+(H-camG.top-camG.bot)*(1-(v-lo)/(hi-lo)),
+    f:x=>(x-camG.pad)/Math.max(W-2*camG.pad,1)*(T-1),v:y=>lo+(1-(y-camG.top)/Math.max(H-camG.top-camG.bot,1))*(hi-lo),
+    sx:(W-2*camG.pad)/Math.max(T-1,1),sy:(H-camG.top-camG.bot)/(hi-lo)}}
+const HANDLE=42;
+// handle positions of a key in screen space: weighted sides sit at their real control point, others at a fixed length
+function handlesOf(k,m){const i=camKeys.indexOf(k),p=camKeys[i-1],n=camKeys[i+1];const out=[];const kx=m.x(k.f),ky=m.y(k.yaw);
+  const side=(dir,T,w,weighted,nb,mode)=>{if(!nb)return;if(k.mode==='broken'&&mode==='constant')return;
+    const dt=Math.abs(nb.f-k.f);let hx,hy;
+    if(weighted){hx=m.x(k.f+dir*w*dt);hy=m.y(k.yaw+dir*T*w*dt)}
+    else{const vx=dir*m.sx,vy=-dir*T*m.sy,l=Math.hypot(vx,vy)||1;hx=kx+vx/l*HANDLE;hy=ky+vy/l*HANDLE}
+    out.push({side:dir<0?'in':'out',x:hx,y:hy,kx,ky})};
+  side(-1,k.inT,k.inW,k.wIn,p,k.lm);side(1,k.outT,k.outW,k.wOut,n,k.rm);return out}
+function drawCamGraph(){
+  const c=el('camGraph'),dpr=window.devicePixelRatio||1,W=c.clientWidth,H=c.clientHeight;if(!W)return;
+  if(c.width!==Math.round(W*dpr)||c.height!==Math.round(H*dpr)){c.width=Math.round(W*dpr);c.height=Math.round(H*dpr)}
+  const x=c.getContext('2d');x.setTransform(dpr,0,0,dpr,0,0);x.clearRect(0,0,W,H);
+  if(!camGraphDrag||!camG.rng)camG.rng=camRange();const m=camXY(c),V=camVars(),T=TOTAL();
+  x.font=`10px ${getComputedStyle(document.body).fontFamily}`;
+  // value grid
+  const span=camG.rng[1]-camG.rng[0],step=[5,10,15,30,45,90].find(s=>span/s<=6)||90;
+  x.lineWidth=1;x.fillStyle=V.muted;
+  for(let v=Math.ceil(camG.rng[0]/step)*step;v<=camG.rng[1];v+=step){const y=Math.round(m.y(v))+.5;x.strokeStyle=V.line;x.globalAlpha=v===0?1:.6;x.beginPath();x.moveTo(camG.pad,y);x.lineTo(W-camG.pad,y);x.stroke();x.globalAlpha=1;x.fillText(v+'°',2,y-2)}
+  // current frame
+  x.strokeStyle=V.muted;x.globalAlpha=.6;x.beginPath();x.moveTo(Math.round(m.x(cur))+.5,0);x.lineTo(Math.round(m.x(cur))+.5,H);x.stroke();x.globalAlpha=1;
+  // the smooth curve (thin) and what is actually shot, one value per frame (1 koma)
+  if(camKeys.length>1){x.strokeStyle=V.fg;x.globalAlpha=.35;x.lineWidth=1;x.beginPath();
+    const a=camKeys[0].f,b=camKeys[camKeys.length-1].f;for(let i=0;i<=400;i++){const f=a+(b-a)*i/400;const y=m.y(yawAt(f));if(i)x.lineTo(m.x(f),y);else x.moveTo(m.x(f),y)}x.stroke();x.globalAlpha=1}
+  x.strokeStyle=V.accent;x.lineWidth=1.6;x.beginPath();
+  for(let f=0;f<T;f++){const y=m.y(yawAt(f));if(f===0)x.moveTo(m.x(0),y);else x.lineTo(m.x(f),y);if(f<T-1)x.lineTo(m.x(f+1),y)}x.stroke();
+  // tangent handles of the selected key
+  if(camSel&&camKeys.includes(camSel))for(const h of handlesOf(camSel,m)){
+    x.strokeStyle=V.fg;x.lineWidth=1;x.beginPath();x.moveTo(h.kx,h.ky);x.lineTo(h.x,h.y);x.stroke();
+    x.beginPath();x.arc(h.x,h.y,4,0,7);x.fillStyle=V.panel;x.fill();x.stroke()}
+  // keys
+  camKeys.forEach(k=>{const px=m.x(k.f),py=m.y(k.yaw),r=k===camSel?6:5;
+    x.beginPath();x.moveTo(px,py-r);x.lineTo(px+r,py);x.lineTo(px,py+r);x.lineTo(px-r,py);x.closePath();
+    x.fillStyle=k===camSel?V.accent:V.panel;x.fill();x.strokeStyle=k===camSel?V.accent:V.fg;x.lineWidth=1.4;x.stroke()});
+}
+let camGraphDrag=null;
+function camPick(e){const c=el('camGraph'),r=c.getBoundingClientRect();if(!camG.rng)camG.rng=camRange();const m=camXY(c),px=e.clientX-r.left,py=e.clientY-r.top;
+  if(camSel&&camKeys.includes(camSel))for(const h of handlesOf(camSel,m))if(Math.hypot(h.x-px,h.y-py)<9)return{h,px,py,m};
+  let best=null,bd=10;for(const k of camKeys){const d=Math.hypot(m.x(k.f)-px,m.y(k.yaw)-py);if(d<bd){bd=d;best=k}}return{k:best,px,py,m}}
+function dragHandle(k,side,f,v){
+  const i=camKeys.indexOf(k),nb=side==='in'?camKeys[i-1]:camKeys[i+1];if(!nb)return;
+  const dir=side==='in'?-1:1;let dx=(f-k.f)*dir;dx=Math.max(dx,0.05);const dt=Math.abs(nb.f-k.f);
+  const slope=(v-k.yaw)/(dir*dx);
+  if(side==='in'&&k.wIn)k.inW=Math.max(0.02,Math.min(1,dx/dt));if(side==='out'&&k.wOut)k.outW=Math.max(0.02,Math.min(1,dx/dt));
+  if(k.mode==='broken'){if(side==='in'){k.lm='free';k.inT=slope}else{k.rm='free';k.outT=slope}}
+  else{k.mode='free';k.inT=k.outT=slope}
+}
+const cg=el('camGraph');
+cg.addEventListener('pointerdown',e=>{if(e.button===2)return;e.preventDefault();cg.focus();cg.setPointerCapture(e.pointerId);closeMenu();
+  const h=camPick(e);setPlaying(false);camG.rng=camRange();
+  if(h.h){camGraphDrag={handle:h.h.side,k:camSel}}
+  else if(h.k){camSel=h.k;camGraphDrag={k:h.k};cur=Math.min(h.k.f,TOTAL()-1)}
+  else{cur=Math.max(0,Math.min(TOTAL()-1,Math.round(h.m.f(h.px))));camGraphDrag={scrub:true}}
+  camMarksSig='';show()});
+cg.addEventListener('pointermove',e=>{if(!camGraphDrag)return;const h=camPick(e);
+  if(camGraphDrag.scrub){const f=Math.max(0,Math.min(TOTAL()-1,Math.round(h.m.f(h.px))));if(f!==cur){cur=f;show()}return}
+  if(camGraphDrag.handle){dragHandle(camGraphDrag.k,camGraphDrag.handle,h.m.f(h.px),h.m.v(h.py));updateTangents();show();return}
+  const k=camGraphDrag.k;const f=Math.max(0,Math.min(TOTAL()-1,Math.round(h.m.f(h.px))));const v=Math.max(-180,Math.min(180,Math.round(h.m.v(h.py))));
+  if(f!==k.f&&!keyAt(f))k.f=f;k.yaw=v;updateTangents();cur=k.f;camMarksSig='';show()});
+const camUp=()=>{if(!camGraphDrag)return;camGraphDrag=null;show()};
+cg.addEventListener('pointerup',camUp);cg.addEventListener('pointercancel',camUp);
+// double-click: add a key on the curve at that frame
+cg.addEventListener('dblclick',e=>{const h=camPick(e);if(h.k||h.h)return;const f=Math.max(0,Math.min(TOTAL()-1,Math.round(h.m.f(h.px))));
+  setKey(f,Math.round(camKeys.length?yawAt(f):h.m.v(h.py)));cur=f;camMarksSig='';show()});
+cg.addEventListener('contextmenu',e=>{e.preventDefault();const h=camPick(e);
+  if(h.k){camSel=h.k;camMarksSig='';show();keyMenu(h.k,e.clientX,e.clientY)}
+  else{const f=Math.max(0,Math.min(TOTAL()-1,Math.round(h.m.f(h.px))));openMenu(e.clientX,e.clientY,[{label:t('camAdd'),run:()=>{setKey(f,Math.round(camKeys.length?yawAt(f):h.m.v(h.py)));cur=f}}])}});
+cg.addEventListener('keydown',e=>{if((e.key==='Delete'||e.key==='Backspace')&&camSel){e.preventDefault();el('camDel').click()}});
+// ---- right-click menu on a key (same items as Unity's key menu) ----
+let menuEl=null;
+function closeMenu(){if(menuEl){menuEl.remove();menuEl=null}}
+function openMenu(x,y,items){closeMenu();const m=document.createElement('div');m.className='cmenu';m.setAttribute('role','menu');
+  for(const it of items){
+    if(it==='-'){m.appendChild(document.createElement('hr'));continue}
+    if(it.head){const d=document.createElement('div');d.className='hd';d.textContent=it.head;m.appendChild(d);
+      const r=document.createElement('div');r.className='rowb';for(const b of it.row){const bt=document.createElement('button');bt.type='button';bt.textContent=b.label;if(b.on)bt.classList.add('on');bt.setAttribute('aria-pressed',!!b.on);
+        bt.onclick=()=>{b.run();closeMenu();updateTangents();camMarksSig='';show()};r.appendChild(bt)}m.appendChild(r);continue}
+    const bt=document.createElement('button');bt.type='button';bt.setAttribute('role','menuitem');bt.innerHTML=`<span class="ck">${it.on?'✓':''}</span>`;bt.append(it.label);
+    bt.onclick=()=>{it.run();closeMenu();updateTangents();camMarksSig='';show()};m.appendChild(bt)}
+  document.body.appendChild(m);const r=m.getBoundingClientRect();
+  m.style.left=Math.max(4,Math.min(x,innerWidth-r.width-4))+'px';m.style.top=Math.max(4,Math.min(y,innerHeight-r.height-4))+'px';menuEl=m;
+  const b=m.querySelector('button');if(b)b.focus()}
+document.addEventListener('pointerdown',e=>{if(menuEl&&!menuEl.contains(e.target))closeMenu()},true);
+document.addEventListener('keydown',e=>{if(e.key==='Escape')closeMenu()});
+function keyMenu(k,x,y){
+  const mode=v=>({label:t({clamped:'tClamped',auto:'tAuto',free:'tFree',flat:'tFlat',broken:'tBroken'}[v]),on:k.mode===v,run:()=>{k.mode=v;if(v!=='broken'){k.lm=k.rm='free';if(v==='free'){k.outT=k.inT}}}});
+  const sideRow=(head,sides)=>{const is=(sd,v)=>k.mode==='broken'&&(sd==='in'?k.lm:k.rm)===v;const all=v=>sides.every(sd=>is(sd,v));
+    const set=v=>()=>{k.mode='broken';for(const sd of sides){if(sd==='in')k.lm=v;else k.rm=v}};
+    const wOn=sides.every(sd=>sd==='in'?k.wIn:k.wOut);
+    return{head,row:[{label:t('sFree'),on:all('free'),run:set('free')},{label:t('sLinear'),on:all('linear'),run:set('linear')},{label:t('sConst'),on:all('constant'),run:set('constant')},
+      {label:t('sWeighted'),on:wOn,run:()=>{for(const sd of sides){if(sd==='in'){k.wIn=!wOn;if(!k.wIn)k.inW=W3}else{k.wOut=!wOn;if(!k.wOut)k.outW=W3}}}}]}};
+  openMenu(x,y,[{label:t('camDel'),run:()=>{camKeys.splice(camKeys.indexOf(k),1);if(camSel===k)camSel=null;if(!camKeys.length)S.camYaw=Math.round(k.yaw)}},'-',
+    mode('clamped'),mode('auto'),mode('free'),mode('flat'),mode('broken'),'-',
+    sideRow(t('sLeft'),['in']),sideRow(t('sRight'),['out']),sideRow(t('sBoth'),['in','out'])]);
+}
+el('camYaw').addEventListener('pointerdown',()=>setPlaying(false));
+el('camYaw').oninput=e=>{const v=+e.target.value;if(camKeys.length){setKey(cur,v);camMarksSig=''}else S.camYaw=v;show()};
+el('camAdd').onclick=()=>{setPlaying(false);setKey(cur,Math.round(yawAt(cur)));camMarksSig='';show()};
+el('camDel').onclick=()=>{if(!camSel)return;const y=yawAt(cur);camKeys.splice(camKeys.indexOf(camSel),1);camSel=null;updateTangents();if(!camKeys.length)S.camYaw=Math.round(y);camMarksSig='';show()};
+el('camClear').onclick=()=>{if(!camKeys.length)return;S.camYaw=0;camKeys=[];camSel=null;closeMenu();camMarksSig='';show()};
+el('camMode').onchange=e=>{if(!camSel)return;const k=camSel;k.mode=e.target.value;if(k.mode!=='broken')k.lm=k.rm='free';updateTangents();show()};
+window.addEventListener('resize',()=>{camMarksSig='';drawCamGraph()});
+window.__cam={hd:()=>{const c=el('camGraph');camG.rng=camG.rng||camRange();return handlesOf(camSel,camXY(c))},keys:()=>camKeys,sel:k=>{camSel=k;show()},yawAt:f=>yawAt(f)};
+
+// ---------------- languages ----------------
+const L={
+ ko:{tMode:'탄젠트',tClamped:'클램프 자동',tAuto:'자동',tFree:'자유 스무스',tFlat:'평탄',tBroken:'분리',sLeft:'왼쪽 탄젠트',sRight:'오른쪽 탄젠트',sBoth:'양쪽 탄젠트',sFree:'자유',sLinear:'선형',sConst:'상수',sWeighted:'가중치',camYaw:'카메라 좌우',camAdd:'키 추가',camDel:'키 삭제',camMarksAria:'카메라 키',camGraphAria:'카메라 좌우 그래프',dbCol:'색',secDebris:'파편',dbOnLbl:'파편',dbCount:'개수',dbSpeed:'속도',dbGrav:'중력 영향',dbBounce:'바운스',marksAria:'폭발 시작 책갈피',markAria:'폭발 {n} 시작 책갈피',detail:'폭발 {n} 상세설정',layerNote:'각 폭발은 서로 영향을 받습니다. 폭발을 추가하거나 타이밍을 변경하면 다른 폭발도 변합니다. 레이어를 켜고 끄는 것은 영향을 주지 않고 투명도만 0%로 만듭니다.',on:'켜짐',off:'꺼짐',madeBy:'만든이',title:'폭발 작화 시뮬레이터',canvas:'폭발 애니메이션 미리보기',scrub:'재생 위치',play:'재생',pause:'일시정지',restart:'처음부터',prev:'한 프레임 뒤로 (←)',next:'한 프레임 앞으로 (→)',speed:'재생 속도',sp1:'1× 속도',sp05:'½× 속도',sp025:'¼× 속도',cntPre:'폭발',cntPost:'개',placed:'폭발 레이어',keys:'Space 재생 · ←/→ 1프레임',clearAll:'모두 지우기',list:'추가한 폭발 목록',secView:'보기',bgCol:'배경색',viewMode:'보기 방식',cel:'셀 필터',raw:'3D 원본',secVideo:'영상',videoSec:'영상 길이',punch:'팽창 속도',settle:'이동거리',secHeat:'열',heatLife:'열이 식는 속도',heatDelay:'열 유지시간',edgeCool:'바깥부터',secShape:'형태',size:'크기',lobes:'큰 덩어리',jet:'돌출',blend:'합침 정도',spread:'퍼짐',bump:'정보량 조절 1',turb:'정보량 조절 2',tone:'정보량 조절 3',rise:'상승',secSeed:'시드',seedVal:'시드 값',reseed:'새 시드',posX:'가로',force:'힘',none:'없음',shake:'흔들림',show:'보기',del:'삭제',ariaShake:'폭발 {n} 흔들림 강도',ariaShow:'폭발 {n}로 이동해서 표시',ariaDel:'폭발 {n} 삭제',ariaHide:'폭발 {n} 화면에서 숨기기',ariaUnhide:'폭발 {n} 다시 표시'},
+ en:{tMode:'Tangent',tClamped:'Clamped Auto',tAuto:'Auto',tFree:'Free Smooth',tFlat:'Flat',tBroken:'Broken',sLeft:'Left Tangent',sRight:'Right Tangent',sBoth:'Both Tangents',sFree:'Free',sLinear:'Linear',sConst:'Constant',sWeighted:'Weighted',camYaw:'Camera orbit',camAdd:'Add key',camDel:'Delete key',camMarksAria:'Camera keys',camGraphAria:'Camera orbit graph',dbCol:'Colour',secDebris:'Debris',dbOnLbl:'Debris',dbCount:'Count',dbSpeed:'Speed',dbGrav:'Gravity',dbBounce:'Bounce',marksAria:'Explosion start markers',markAria:'Explosion {n} start marker',detail:'Explosion {n} settings',layerNote:'Explosions affect one another. Adding an explosion or changing its timing also changes the others. Turning a layer on or off has no effect on the others; it only sets its opacity to 0%.',on:'On',off:'Off',madeBy:'Made by',title:'Explosion Sakuga Simulator',canvas:'Explosion animation preview',scrub:'Playback position',play:'Play',pause:'Pause',restart:'Restart',prev:'Back one frame (←)',next:'Forward one frame (→)',speed:'Playback speed',sp1:'1× speed',sp05:'½× speed',sp025:'¼× speed',cntPre:'Explosions',cntPost:'',placed:'Explosion layers',keys:'Space play · ←/→ 1 frame',clearAll:'Clear all',list:'List of placed explosions',secView:'View',bgCol:'Background',viewMode:'Display mode',cel:'Cel filter',raw:'Raw 3D',secVideo:'Clip',videoSec:'Clip length',punch:'Burst speed',settle:'Travel distance',secHeat:'Heat',heatLife:'Cooling speed',heatDelay:'Heat hold time',edgeCool:'Edges first',secShape:'Shape',size:'Size',lobes:'Main lobes',jet:'Protrusion',blend:'Merge',spread:'Spread',bump:'Detail amount 1',turb:'Detail amount 2',tone:'Detail amount 3',rise:'Rise',secSeed:'Seed',seedVal:'Seed value',reseed:'New seed',posX:'X',force:'Force',none:'none',shake:'Shake',show:'Show',del:'Delete',ariaShake:'Shake strength for explosion {n}',ariaShow:'Go to explosion {n} and highlight it',ariaDel:'Delete explosion {n}',ariaHide:'Hide explosion {n} on screen',ariaUnhide:'Show explosion {n} again'},
+ ja:{tMode:'接線',tClamped:'クランプ自動',tAuto:'自動',tFree:'フリースムーズ',tFlat:'フラット',tBroken:'ブロークン',sLeft:'左接線',sRight:'右接線',sBoth:'両方の接線',sFree:'フリー',sLinear:'リニア',sConst:'一定',sWeighted:'ウェイト',camYaw:'カメラ左右',camAdd:'キー追加',camDel:'キー削除',camMarksAria:'カメラキー',camGraphAria:'カメラ左右グラフ',dbCol:'色',secDebris:'破片',dbOnLbl:'破片',dbCount:'個数',dbSpeed:'速度',dbGrav:'重力の影響',dbBounce:'バウンド',marksAria:'爆発開始のしおり',markAria:'爆発{n}の開始しおり',detail:'爆発{n} 詳細設定',layerNote:'各爆発は互いに影響し合います。爆発を追加したりタイミングを変えたりすると、ほかの爆発も変わります。レイヤーのオン・オフは影響を与えず、不透明度を0%にするだけです。',on:'オン',off:'オフ',madeBy:'制作',title:'爆発作画シミュレーター',canvas:'爆発アニメーションのプレビュー',scrub:'再生位置',play:'再生',pause:'一時停止',restart:'最初から',prev:'1フレーム戻る (←)',next:'1フレーム進む (→)',speed:'再生速度',sp1:'1×速度',sp05:'½×速度',sp025:'¼×速度',cntPre:'爆発',cntPost:'個',placed:'爆発レイヤー',keys:'Space 再生 · ←/→ 1フレーム',clearAll:'すべて削除',list:'配置した爆発の一覧',secView:'表示',bgCol:'背景色',viewMode:'表示方式',cel:'セルフィルター',raw:'3D元データ',secVideo:'映像',videoSec:'映像の長さ',punch:'膨張速度',settle:'移動距離',secHeat:'熱',heatLife:'熱が冷める速さ',heatDelay:'熱の保持時間',edgeCool:'外側から',secShape:'形状',size:'大きさ',lobes:'大きな塊',jet:'突出',blend:'結合度',spread:'広がり',bump:'情報量調整 1',turb:'情報量調整 2',tone:'情報量調整 3',rise:'上昇',secSeed:'シード',seedVal:'シード値',reseed:'新しいシード',posX:'横',force:'力',none:'なし',shake:'揺れ',show:'表示',del:'削除',ariaShake:'爆発{n}の揺れの強さ',ariaShow:'爆発{n}へ移動して表示',ariaDel:'爆発{n}を削除',ariaHide:'爆発{n}を画面で非表示',ariaUnhide:'爆発{n}を再表示'},
+ 'zh-CN':{tMode:'切线',tClamped:'钳制自动',tAuto:'自动',tFree:'自由平滑',tFlat:'平坦',tBroken:'断开',sLeft:'左切线',sRight:'右切线',sBoth:'两侧切线',sFree:'自由',sLinear:'线性',sConst:'常量',sWeighted:'加权',camYaw:'相机左右',camAdd:'添加关键帧',camDel:'删除关键帧',camMarksAria:'相机关键帧',camGraphAria:'相机左右曲线',dbCol:'颜色',secDebris:'碎片',dbOnLbl:'碎片',dbCount:'数量',dbSpeed:'速度',dbGrav:'重力影响',dbBounce:'弹跳',marksAria:'爆炸起始书签',markAria:'爆炸{n}起始书签',detail:'爆炸{n} 详细设置',layerNote:'各个爆炸会相互影响。添加爆炸或更改时机时，其他爆炸也会随之变化。开关图层不会产生影响，只会把不透明度设为0%。',on:'开',off:'关',madeBy:'制作',title:'爆炸作画模拟器',canvas:'爆炸动画预览',scrub:'播放位置',play:'播放',pause:'暂停',restart:'从头开始',prev:'后退一帧 (←)',next:'前进一帧 (→)',speed:'播放速度',sp1:'1×速度',sp05:'½×速度',sp025:'¼×速度',cntPre:'爆炸',cntPost:'个',placed:'爆炸图层',keys:'Space 播放 · ←/→ 1帧',clearAll:'全部清除',list:'已放置的爆炸列表',secView:'显示',bgCol:'背景色',viewMode:'显示方式',cel:'赛璐璐滤镜',raw:'3D原始',secVideo:'影像',videoSec:'影像长度',punch:'膨胀速度',settle:'移动距离',secHeat:'热',heatLife:'热量冷却速度',heatDelay:'热量保持时间',edgeCool:'由外向内',secShape:'形状',size:'大小',lobes:'大团块',jet:'突出',blend:'融合度',spread:'扩散',bump:'信息量调节 1',turb:'信息量调节 2',tone:'信息量调节 3',rise:'上升',secSeed:'种子',seedVal:'种子值',reseed:'新种子',posX:'横向',force:'力',none:'无',shake:'震动',show:'查看',del:'删除',ariaShake:'爆炸{n}的震动强度',ariaShow:'跳到爆炸{n}并高亮显示',ariaDel:'删除爆炸{n}',ariaHide:'在画面中隐藏爆炸{n}',ariaUnhide:'重新显示爆炸{n}'},
+ 'zh-TW':{tMode:'切線',tClamped:'鉗制自動',tAuto:'自動',tFree:'自由平滑',tFlat:'平坦',tBroken:'斷開',sLeft:'左切線',sRight:'右切線',sBoth:'兩側切線',sFree:'自由',sLinear:'線性',sConst:'常數',sWeighted:'加權',camYaw:'相機左右',camAdd:'新增關鍵影格',camDel:'刪除關鍵影格',camMarksAria:'相機關鍵影格',camGraphAria:'相機左右曲線',dbCol:'顏色',secDebris:'碎片',dbOnLbl:'碎片',dbCount:'數量',dbSpeed:'速度',dbGrav:'重力影響',dbBounce:'彈跳',marksAria:'爆炸起始書籤',markAria:'爆炸{n}起始書籤',detail:'爆炸{n} 詳細設定',layerNote:'各個爆炸會相互影響。新增爆炸或變更時機時，其他爆炸也會隨之變化。開關圖層不會產生影響，只會把不透明度設為0%。',on:'開',off:'關',madeBy:'製作',title:'爆炸作畫模擬器',canvas:'爆炸動畫預覽',scrub:'播放位置',play:'播放',pause:'暫停',restart:'從頭開始',prev:'後退一幀 (←)',next:'前進一幀 (→)',speed:'播放速度',sp1:'1×速度',sp05:'½×速度',sp025:'¼×速度',cntPre:'爆炸',cntPost:'個',placed:'爆炸圖層',keys:'Space 播放 · ←/→ 1幀',clearAll:'全部清除',list:'已放置的爆炸列表',secView:'顯示',bgCol:'背景色',viewMode:'顯示方式',cel:'賽璐璐濾鏡',raw:'3D原始',secVideo:'影像',videoSec:'影像長度',punch:'膨脹速度',settle:'移動距離',secHeat:'熱',heatLife:'熱量冷卻速度',heatDelay:'熱量保持時間',edgeCool:'由外向內',secShape:'形狀',size:'大小',lobes:'大團塊',jet:'突出',blend:'融合度',spread:'擴散',bump:'資訊量調節 1',turb:'資訊量調節 2',tone:'資訊量調節 3',rise:'上升',secSeed:'種子',seedVal:'種子值',reseed:'新種子',posX:'橫向',force:'力',none:'無',shake:'震動',show:'查看',del:'刪除',ariaShake:'爆炸{n}的震動強度',ariaShow:'跳到爆炸{n}並標示',ariaDel:'刪除爆炸{n}',ariaHide:'在畫面中隱藏爆炸{n}',ariaUnhide:'重新顯示爆炸{n}'}
+};
+let LANG='ko';
+const EYE_OPEN='<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>';
+const EYE_SHUT='<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 10c2.4 3.4 5.8 5 10 5s7.6-1.6 10-5"/><path d="M5.2 13.4 3.6 16"/><path d="M9.4 14.8 8.8 17.8"/><path d="M14.6 14.8l.6 3"/><path d="M18.8 13.4l1.6 2.6"/></svg>';
+function t(k,n){const v=(L[LANG]&&L[LANG][k])??L.ko[k]??k;return n===undefined?v:v.replace('{n}',n)}
+function pickLang(){
+  try{const s=localStorage.getItem('explosion-sim-lang');if(s&&L[s])return s}catch(e){}
+  const nl=(navigator.language||'ko').toLowerCase();
+  if(nl.startsWith('ko'))return'ko';if(nl.startsWith('ja'))return'ja';
+  if(nl.startsWith('zh'))return/(tw|hk|mo|hant)/.test(nl)?'zh-TW':'zh-CN';
+  return'en';
+}
+function applyLang(code){
+  LANG=L[code]?code:'ko';document.documentElement.lang=LANG;
+  document.querySelectorAll('[data-i18n]').forEach(n=>{n.textContent=t(n.dataset.i18n)});
+  document.querySelectorAll('[data-i18n-aria]').forEach(n=>n.setAttribute('aria-label',t(n.dataset.i18nAria)));
+  document.querySelectorAll('[data-i18n-title]').forEach(n=>n.setAttribute('title',t(n.dataset.i18nTitle)));
+  document.title=t('title');
+  const pl=document.getElementById('play');if(pl)pl.textContent=playing?t('pause'):t('play');
+  listSig='';renderList();
+  const sel=document.getElementById('lang');if(sel)sel.value=LANG;
+}
+el('lang').onchange=e=>{applyLang(e.target.value);try{localStorage.setItem('explosion-sim-lang',LANG)}catch(err){}};
+el('play').onclick=()=>setPlaying(!playing);
+el('restart').onclick=()=>{cur=0;acc=0;show()};
+el('prev').onclick=()=>{setPlaying(false);cur=(cur-1+TOTAL())%TOTAL();show()};
+el('next').onclick=()=>{setPlaying(false);cur=(cur+1)%TOTAL();show()};
+el('speed').onchange=e=>{speed=+e.target.value};
+el('scrub').oninput=e=>{setPlaying(false);cur=+e.target.value;show()};
+const seg=(attr,key)=>document.querySelectorAll(`[data-${attr}]`).forEach(b=>b.onclick=()=>{document.querySelectorAll(`[data-${attr}]`).forEach(x=>x.setAttribute('aria-pressed',x===b));S[key]=b.dataset[attr];regen()});
+seg('view','view');seg('mode','mode');
+const ranges={dbCount:0,dbSpeed:2,dbGrav:2,dbBounce:2,videoSec:1,settle:1,heatLife:2,heatDelay:2,size:2,lobes:0,jet:2,blend:2,spread:2,bump:2,turb:2,tone:2,rise:2};
+const unit={};
+for(const [id,dp] of Object.entries(ranges)){const i=el(id),o=el(id+'O');i.oninput=()=>{o.textContent=(+i.value).toFixed(dp)+(unit[id]||'');
+  if(PKEYS.includes(id)){if(!selected)return;selected.p[id]=INV[id]?INV[id]-(+i.value):+i.value;selected.parts=makeParts(selected);show()}else{S[id]=+i.value;regen()}}}
+el('dbCol').oninput=e=>{if(!selected)return;selected.p.dbCol=e.target.value;el('dbColO').textContent=e.target.value;show()};
+el('dbOn').onclick=()=>{if(!selected)return;selected.p.dbOn=!selected.p.dbOn;renderDetail();show()};
+window.addEventListener('resize',()=>show());
+el('bgCol').oninput=e=>{S.bgCol=e.target.value;el('bgColO').textContent=e.target.value;el('screen').style.background=e.target.value;show()};
+el('seed').onchange=e=>{if(!selected)return;selected.seed=Math.max(1,parseInt(e.target.value)||1);selected.parts=makeParts(selected);listSig='';show()};
+el('reseed').onclick=()=>{if(!selected)return;selected.seed=1+Math.floor(Math.random()*99999);selected.parts=makeParts(selected);listSig='';show()};
+// click to place an explosion at this frame
+// press = where it goes off, drag = direction and strength of the push, release = detonate
+const ov=el('ov'),octx=ov.getContext('2d');let drag=null;
+const toWorld=(cx,cy)=>{const r=glc.getBoundingClientRect();return[((cx-r.left)/r.width*2-1)*(r.width/r.height),-((cy-r.top)/r.height*2-1)]};
+function sizeOv(){const dpr=window.devicePixelRatio||1;ov.width=Math.round(ov.clientWidth*dpr);ov.height=Math.round(ov.clientHeight*dpr)}
+function drawMarker(){
+  if(!blink.ex||!blinkOn())return;
+  {const d=window.devicePixelRatio||1;if(ov.width!==Math.round(ov.clientWidth*d))sizeOv()}
+  const dpr=window.devicePixelRatio||1,r=ov.getBoundingClientRect();
+  const o=toCam([...originOf(blink.ex),blink.ex.z||0]);const px=(o[0]/(r.width/r.height)+1)/2*r.width*dpr,py=(1-o[1])/2*r.height*dpr;
+  const n=blink.ex.name;
+  octx.lineWidth=5*dpr;octx.strokeStyle='rgba(20,24,40,.6)';octx.beginPath();octx.arc(px,py,26*dpr,0,7);octx.stroke();
+  octx.lineWidth=2.5*dpr;octx.strokeStyle='#fffdf0';octx.beginPath();octx.arc(px,py,26*dpr,0,7);octx.stroke();
+  octx.font=`600 ${14*dpr}px ${getComputedStyle(document.body).fontFamily}`;octx.textAlign='center';
+  octx.lineWidth=4*dpr;octx.strokeStyle='rgba(20,24,40,.7)';octx.strokeText(n,px,py-34*dpr);octx.fillStyle='#fffdf0';octx.fillText(n,px,py-34*dpr);octx.textAlign='start';
+}
+function drawArrow(){
+  octx.setTransform(1,0,0,1,0,0);octx.clearRect(0,0,ov.width,ov.height);
+  if(!drag){drawMarker();return}
+  const dpr=window.devicePixelRatio||1,r=ov.getBoundingClientRect();
+  const x0=(drag.sx-r.left)*dpr,y0=(drag.sy-r.top)*dpr,x1=(drag.cx-r.left)*dpr,y1=(drag.cy-r.top)*dpr;
+  const dx=x1-x0,dy=y1-y0,L=Math.hypot(dx,dy);
+  octx.lineCap='round';octx.lineJoin='round';
+  const ring=(w,c)=>{octx.beginPath();octx.arc(x0,y0,7*dpr,0,7);octx.lineWidth=w;octx.strokeStyle=c;octx.stroke()};
+  ring(5*dpr,'rgba(20,24,40,.55)');ring(2.2*dpr,'#fffdf0');
+  if(L<4*dpr)return;
+  const ux=dx/L,uy=dy/L,h=Math.min(16*dpr,L*0.45);
+  const path=()=>{octx.beginPath();octx.moveTo(x0+ux*9*dpr,y0+uy*9*dpr);octx.lineTo(x1,y1);
+    octx.moveTo(x1-ux*h-uy*h*0.6,y1-uy*h+ux*h*0.6);octx.lineTo(x1,y1);octx.lineTo(x1-ux*h+uy*h*0.6,y1-uy*h-ux*h*0.6)};
+  path();octx.lineWidth=6*dpr;octx.strokeStyle='rgba(20,24,40,.55)';octx.stroke();
+  path();octx.lineWidth=2.6*dpr;octx.strokeStyle='#fffdf0';octx.stroke();
+  const m=Math.min(1,dragLen()/0.9);octx.font=`${12*dpr}px ${getComputedStyle(document.body).fontFamily}`;octx.fillStyle='#fffdf0';
+  octx.strokeStyle='rgba(20,24,40,.6)';octx.lineWidth=3*dpr;const t='힘 '+Math.round(m*100)+'%';octx.strokeText(t,x1+10*dpr,y1-8*dpr);octx.fillText(t,x1+10*dpr,y1-8*dpr);
+}
+function dragLen(){if(!drag)return 0;const a=toWorld(drag.sx,drag.sy),b=toWorld(drag.cx,drag.cy);return Math.hypot(b[0]-a[0],b[1]-a[1])}
+glc.addEventListener('pointerdown',e=>{if(e.button!==undefined&&e.button!==0)return;e.preventDefault();glc.setPointerCapture(e.pointerId);
+  drag={sx:e.clientX,sy:e.clientY,cx:e.clientX,cy:e.clientY};sizeOv();drawArrow()});
+glc.addEventListener('pointermove',e=>{if(!drag)return;drag.cx=e.clientX;drag.cy=e.clientY;drawArrow()});
+glc.addEventListener('pointerup',e=>{
+  if(!drag)return;drag.cx=e.clientX;drag.cy=e.clientY;
+  const a=toWorld(drag.sx,drag.sy),b=toWorld(drag.cx,drag.cy);const dx=b[0]-a[0],dy=b[1]-a[1],L=Math.hypot(dx,dy);
+  const fm=L<0.03?0:Math.min(1,L/0.9);
+  // where it goes off: the ground spot under the press; the push: the drawn arrow turned into the world
+  const g=screenToGround(a[0],a[1]);const wd=fm?camDirToWorld([dx/L,dy/L,0]):[0,0,0];
+  // every placed explosion gets a fresh random seed, so no two share a shape
+  const ex={x:g[0],z:g[1],y:a[1],spawn:cur,seed:1+Math.floor(Math.random()*99999),fx:wd[0],fy:wd[1],fz:wd[2],fm,name:nextName(),p:Object.assign({},DEF)};ex.parts=makeParts(ex);
+  explosions.push(ex);if(explosions.length>MAXE)explosions.shift();relabel();selected=ex;drag=null;drawArrow();show();
+});
+glc.addEventListener('pointercancel',()=>{drag=null;drawArrow()});
+window.addEventListener('resize',()=>{sizeOv();drawArrow();renderMarks()});
+el('clearAll').onclick=()=>{explosions=[];selected=null;show()};
+const hint=el('hint');
+document.addEventListener('keydown',e=>{if(/INPUT|SELECT/.test(e.target.tagName))return;
+  if(e.code==='Space'){e.preventDefault();setPlaying(!playing)}else if(e.key==='ArrowRight'){e.preventDefault();el('next').click()}else if(e.key==='ArrowLeft'){e.preventDefault();el('prev').click()}});
+defaultScene();
+if(!window.__EXPLOSION_RES){
+  const probe=()=>{const px=new Uint8Array(4);const t0=performance.now();render(26);gl.readPixels(0,0,1,1,gl.RGBA,gl.UNSIGNED_BYTE,px);return performance.now()-t0};
+  probe();let ms=probe();
+  for(const w of [720,540]){if(ms<=40)break;glc.width=w;glc.height=Math.round(w*9/16);ms=probe()}
+}
+explosions=[];
+if(window.matchMedia('(prefers-reduced-motion: reduce)').matches){cur=26;setPlaying(false)}
+applyLang(pickLang());
+show();requestAnimationFrame(tick);
+window.__explosion={_db:(i,te)=>{const ex=explosions[0];return debrisState(ex,debrisSpec(ex)[i],te)},_blink:blink,seek:f=>{setPlaying(false);cur=f;show()},info:()=>({total:TOTAL(),n:explosions.length}),set:(k,v)=>{S[k]=v;regen()},
+  add:(x,y,f,fx=0,fy=0,fm=0)=>{const ex={x,y,spawn:f,seed:S.seed+(explosions.length+1)*101,fx,fy,fm,name:nextName(),p:Object.assign({},DEF)};ex.parts=makeParts(ex);explosions.push(ex);selected=ex}};
+})();
+</script>
